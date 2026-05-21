@@ -7,9 +7,9 @@
 #include "charactersGameMode.generated.h"
 
 /**
- *  Simple GameMode for a third person game
+ *  Runtime game mode with hard defaults for pawn/controller wiring.
  */
-UCLASS(abstract)
+UCLASS()
 class AcharactersGameMode : public AGameModeBase
 {
 	GENERATED_BODY()

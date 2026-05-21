@@ -15,6 +15,14 @@
 #include "InputCoreTypes.h"
 #include "characters.h"
 
+namespace
+{
+	UInputAction* LoadInputActionFallback(const TCHAR* AssetPath)
+	{
+		return Cast<UInputAction>(StaticLoadObject(UInputAction::StaticClass(), nullptr, AssetPath));
+	}
+}
+
 AcharactersCharacter::AcharactersCharacter()
 {
 	// Set size for collision capsule
@@ -55,19 +63,61 @@ AcharactersCharacter::AcharactersCharacter()
 
 void AcharactersCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInputComponent)
 {
+	Super::SetupPlayerInputComponent(PlayerInputComponent);
+
+	if (!JumpAction)
+	{
+		JumpAction = LoadInputActionFallback(TEXT("/Game/Input/Actions/IA_Jump.IA_Jump"));
+	}
+
+	if (!MoveAction)
+	{
+		MoveAction = LoadInputActionFallback(TEXT("/Game/Input/Actions/IA_Move.IA_Move"));
+	}
+
+	if (!LookAction)
+	{
+		LookAction = LoadInputActionFallback(TEXT("/Game/Input/Actions/IA_Look.IA_Look"));
+	}
+
+	if (!MouseLookAction)
+	{
+		MouseLookAction = LoadInputActionFallback(TEXT("/Game/Input/Actions/IA_MouseLook.IA_MouseLook"));
+	}
+
 	// Set up action bindings
 	if (UEnhancedInputComponent* EnhancedInputComponent = Cast<UEnhancedInputComponent>(PlayerInputComponent)) {
 		
 		// Jumping
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
-		EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+		if (JumpAction)
+		{
+			EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Started, this, &ACharacter::Jump);
+			EnhancedInputComponent->BindAction(JumpAction, ETriggerEvent::Completed, this, &ACharacter::StopJumping);
+		}
 
 		// Moving
-		EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AcharactersCharacter::Move);
-		EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AcharactersCharacter::Look);
+		if (MoveAction)
+		{
+			EnhancedInputComponent->BindAction(MoveAction, ETriggerEvent::Triggered, this, &AcharactersCharacter::Move);
+		}
+
+		if (MouseLookAction)
+		{
+			EnhancedInputComponent->BindAction(MouseLookAction, ETriggerEvent::Triggered, this, &AcharactersCharacter::Look);
+		}
 
 		// Looking
-		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AcharactersCharacter::Look);
+		if (LookAction)
+		{
+			EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AcharactersCharacter::Look);
+		}
+
+		if (!MoveAction || (!LookAction && !MouseLookAction))
+		{
+			UE_LOG(Logcharacters, Warning,
+				TEXT("'%s' has missing input actions (Move/Look). Check BP defaults or /Game/Input/Actions assets."),
+				*GetNameSafe(this));
+		}
 
 	}
 	else

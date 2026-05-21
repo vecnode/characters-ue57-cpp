@@ -9,6 +9,14 @@
 #include "characters.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
+namespace
+{
+	UInputMappingContext* LoadMappingContextFallback(const TCHAR* AssetPath)
+	{
+		return Cast<UInputMappingContext>(StaticLoadObject(UInputMappingContext::StaticClass(), nullptr, AssetPath));
+	}
+}
+
 void AcharactersPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
@@ -43,9 +51,28 @@ void AcharactersPlayerController::SetupInputComponent()
 		// Add Input Mapping Contexts
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 		{
+			if (DefaultMappingContexts.Num() == 0)
+			{
+				if (UInputMappingContext* DefaultContext = LoadMappingContextFallback(TEXT("/Game/Input/IMC_Default.IMC_Default")))
+				{
+					DefaultMappingContexts.Add(DefaultContext);
+				}
+			}
+
+			if (MobileExcludedMappingContexts.Num() == 0)
+			{
+				if (UInputMappingContext* MouseContext = LoadMappingContextFallback(TEXT("/Game/Input/IMC_MouseLook.IMC_MouseLook")))
+				{
+					MobileExcludedMappingContexts.Add(MouseContext);
+				}
+			}
+
 			for (UInputMappingContext* CurrentContext : DefaultMappingContexts)
 			{
-				Subsystem->AddMappingContext(CurrentContext, 0);
+				if (CurrentContext)
+				{
+					Subsystem->AddMappingContext(CurrentContext, 0);
+				}
 			}
 
 			// only add these IMCs if we're not using mobile touch input
@@ -53,7 +80,10 @@ void AcharactersPlayerController::SetupInputComponent()
 			{
 				for (UInputMappingContext* CurrentContext : MobileExcludedMappingContexts)
 				{
-					Subsystem->AddMappingContext(CurrentContext, 0);
+					if (CurrentContext)
+					{
+						Subsystem->AddMappingContext(CurrentContext, 0);
+					}
 				}
 			}
 		}
