@@ -1,3 +1,27 @@
+# Unreal generated/build artifacts
+Binaries/
+Build/
+DerivedDataCache/
+Intermediate/
+Saved/
+
+# IDE/editor artifacts
+.vs/
+.vscode/
+*.VC.db
+*.VC.opendb
+*.suo
+*.user
+*.userosscache
+*.sln.docstates
+
+# Logs and crash dumps
+*.log
+*.dmp
+
+# Requested: stop tracking hashed World Partition external asset files
+Content/__ExternalActors__/
+Content/__ExternalObjects__/
 Binaries/
 Build/
 DerivedDataCache/
