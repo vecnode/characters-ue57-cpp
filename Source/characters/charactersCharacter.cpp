@@ -7,9 +7,12 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "GameFramework/Controller.h"
+#include "GameFramework/PlayerController.h"
+#include "Engine/Engine.h"
 #include "EnhancedInputComponent.h"
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
+#include "InputCoreTypes.h"
 #include "characters.h"
 
 AcharactersCharacter::AcharactersCharacter()
@@ -65,10 +68,25 @@ void AcharactersCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 
 		// Looking
 		EnhancedInputComponent->BindAction(LookAction, ETriggerEvent::Triggered, this, &AcharactersCharacter::Look);
+
 	}
 	else
 	{
 		UE_LOG(Logcharacters, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
+	}
+
+}
+
+void AcharactersCharacter::Tick(float DeltaSeconds)
+{
+	Super::Tick(DeltaSeconds);
+
+	if (APlayerController* PC = Cast<APlayerController>(GetController()))
+	{
+		if (PC->WasInputKeyJustPressed(EKeys::H))
+		{
+			PrintHelloWorld();
+		}
 	}
 }
 
@@ -130,4 +148,23 @@ void AcharactersCharacter::DoJumpEnd()
 {
 	// signal the character to stop jumping
 	StopJumping();
+}
+
+void AcharactersCharacter::PrintHelloWorld()
+{
+	const FVector CharacterLocation = GetActorLocation();
+	const FString PositionText = FString::Printf(
+		TEXT("Character Position: X=%.2f Y=%.2f Z=%.2f"),
+		CharacterLocation.X,
+		CharacterLocation.Y,
+		CharacterLocation.Z);
+
+	UE_LOG(Logcharacters, Log, TEXT("Hello World!"));
+	UE_LOG(Logcharacters, Log, TEXT("%s"), *PositionText);
+
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Hello World!"));
+		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, PositionText);
+	}
 }

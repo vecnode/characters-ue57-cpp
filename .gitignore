@@ -42,3 +42,5 @@ Saved/
 *.dmp
 
 *.code-workspace
+
+*.uasset

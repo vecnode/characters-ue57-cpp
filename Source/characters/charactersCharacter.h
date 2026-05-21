@@ -59,6 +59,9 @@ protected:
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
+	/** Per-frame update used for debug key checks */
+	virtual void Tick(float DeltaSeconds) override;
+
 protected:
 
 	/** Called for movement input */
@@ -66,6 +69,9 @@ protected:
 
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
+
+	/** Prints hello world and the character world position when the H key is pressed */
+	void PrintHelloWorld();
 
 public:
 
