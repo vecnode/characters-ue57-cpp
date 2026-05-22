@@ -46,10 +46,32 @@ protected:
 	/** Called when this controller possesses a new pawn. Sets up third-person camera. */
 	virtual void OnPossess(APawn* InPawn) override;
 
+	/** Per-frame camera distance update (mouse wheel zoom). */
+	virtual void PlayerTick(float DeltaTime) override;
+
 	/** Input mapping context setup */
 	virtual void SetupInputComponent() override;
 
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
+
+	/** Minimum zoom-in camera distance. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Zoom")
+	float MinCameraDistance = 60.0f;
+
+	/** Maximum zoom-out camera distance. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Zoom")
+	float MaxCameraDistance = 500.0f;
+
+	/** Distance change per mouse wheel notch. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Zoom")
+	float MouseWheelZoomStep = 10.0f;
+
+	/** Smoothing speed for zoom interpolation. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Zoom")
+	float CameraZoomInterpSpeed = 10.0f;
+
+	/** Desired camera boom distance, updated by mouse wheel. */
+	float DesiredCameraDistance = -1.0f;
 
 };

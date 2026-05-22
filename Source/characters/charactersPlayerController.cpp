@@ -9,6 +9,7 @@
 #include "characters.h"
 #include "Camera/CameraComponent.h"
 #include "GameFramework/SpringArmComponent.h"
+#include "InputCoreTypes.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 namespace
@@ -37,6 +38,7 @@ void AcharactersPlayerController::OnPossess(APawn* InPawn)
 	{
 		SpringArm->bUsePawnControlRotation = true;
 		SpringArm->bDoCollisionTest        = false;
+		DesiredCameraDistance = FMath::Clamp(SpringArm->TargetArmLength, MinCameraDistance, MaxCameraDistance);
 	}
 
 	if (FollowCam)
@@ -55,6 +57,49 @@ void AcharactersPlayerController::OnPossess(APawn* InPawn)
 		*InPawn->GetClass()->GetName(),
 		SpringArm ? TEXT("found") : TEXT("MISSING"),
 		FollowCam  ? TEXT("found") : TEXT("MISSING"));
+}
+
+void AcharactersPlayerController::PlayerTick(float DeltaTime)
+{
+	Super::PlayerTick(DeltaTime);
+
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn)
+	{
+		return;
+	}
+
+	USpringArmComponent* SpringArm = ControlledPawn->FindComponentByClass<USpringArmComponent>();
+	if (!SpringArm)
+	{
+		return;
+	}
+
+	if (DesiredCameraDistance < 0.0f)
+	{
+		DesiredCameraDistance = FMath::Clamp(SpringArm->TargetArmLength, MinCameraDistance, MaxCameraDistance);
+	}
+
+	if (WasInputKeyJustPressed(EKeys::MouseScrollUp))
+	{
+		DesiredCameraDistance -= MouseWheelZoomStep;
+	}
+	if (WasInputKeyJustPressed(EKeys::MouseScrollDown))
+	{
+		DesiredCameraDistance += MouseWheelZoomStep;
+	}
+
+	DesiredCameraDistance = FMath::Clamp(DesiredCameraDistance, MinCameraDistance, MaxCameraDistance);
+	SpringArm->TargetArmLength = FMath::FInterpTo(
+		SpringArm->TargetArmLength,
+		DesiredCameraDistance,
+		DeltaTime,
+		CameraZoomInterpSpeed);
 }
 
 void AcharactersPlayerController::BeginPlay()

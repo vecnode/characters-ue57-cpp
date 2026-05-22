@@ -28,7 +28,7 @@ namespace
 			MoveComp->RotationRate = FRotator(0.0f, 500.0f, 0.0f);
 			MoveComp->JumpZVelocity = 500.0f;
 			MoveComp->AirControl = 0.35f;
-			MoveComp->MaxWalkSpeed = 500.0f;
+			MoveComp->MaxWalkSpeed = 220.0f;
 			MoveComp->MinAnalogWalkSpeed = 20.0f;
 			MoveComp->BrakingDecelerationWalking = 2000.0f;
 			MoveComp->BrakingDecelerationFalling = 1500.0f;
@@ -54,9 +54,9 @@ namespace
 		}
 
 		DesiredSpringArm->bUsePawnControlRotation = true;
-		DesiredSpringArm->TargetArmLength = 350.0f;
+		DesiredSpringArm->TargetArmLength = 200.0f;
 		DesiredSpringArm->bDoCollisionTest = false;
-		DesiredSpringArm->SocketOffset = FVector(0.0f, 60.0f, 10.0f);
+		DesiredSpringArm->SocketOffset = FVector(0.0f, 0.0f, 10.0f);
 		DesiredCamera->bUsePawnControlRotation = false;
 		DesiredCamera->Activate();
 	}
