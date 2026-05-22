@@ -22,6 +22,9 @@ Saved/
 # Requested: stop tracking hashed World Partition external asset files
 Content/__ExternalActors__/
 Content/__ExternalObjects__/
+Content/Variant_Combat/
+Content/Variant_Platforming/
+Content/Variant_SideScrolling/
 Binaries/
 Build/
 DerivedDataCache/
