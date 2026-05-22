@@ -2,6 +2,8 @@
 
 UE 5.7 C++ project that enables player control of a placed MetaHuman actor not derived from APawn.
 
+Ongoing. AI not implemented yet. 
+
 ## Required Level Setup
 - Place 1 MetaHuman actor in the level named `MAIN_CHARACTER`.
 - `MAIN_CHARACTER` can be a Blueprint Actor (for example `BP_character2_C`), not a `Pawn`.

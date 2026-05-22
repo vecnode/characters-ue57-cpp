@@ -4,9 +4,13 @@
 
 #include "CoreMinimal.h"
 #include "Engine/GameInstance.h"
+#include "HttpRequestHandler.h"
+#include "HttpRouteHandle.h"
 #include "charactersGameInstance.generated.h"
 
 class AcharactersCharacter;
+class IHttpRouter;
+struct FHttpServerRequest;
 
 /**
  * Singleton Game Instance for the characters project.
@@ -18,7 +22,7 @@ class AcharactersCharacter;
  * --- Editor setup required ---
  * Project Settings → Maps & Modes → Game Instance Class = charactersGameInstance
  */
-UCLASS()
+UCLASS(Config=Game)
 class UcharactersGameInstance : public UGameInstance
 {
 	GENERATED_BODY()
@@ -51,4 +55,23 @@ public:
 	 *       GI->ActivePlayerCharacter->DoSomething();
 	 */
 	static UcharactersGameInstance* Get(const UObject* WorldContextObject);
+
+	virtual void Init() override;
+	virtual void Shutdown() override;
+
+	UPROPERTY(Config, EditAnywhere, Category="Networking|HTTP Server")
+	bool bEnableLocalHttpServer = true;
+
+	UPROPERTY(Config, EditAnywhere, Category="Networking|HTTP Server", meta=(ClampMin="1024", ClampMax="65535"))
+	int32 LocalHttpServerPort = 30080;
+
+private:
+
+	bool HandleHealthRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	bool HandleEchoRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	void StartLocalHttpServer();
+	void StopLocalHttpServer();
+
+	TSharedPtr<IHttpRouter> LocalHttpRouter;
+	TArray<FHttpRouteHandle> RouteHandles;
 };

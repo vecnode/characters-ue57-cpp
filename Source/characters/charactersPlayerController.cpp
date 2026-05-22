@@ -94,6 +94,14 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 		DesiredCameraDistance += MouseWheelZoomStep;
 	}
 
+	// Standalone/shipping builds often report wheel movement through axis input
+	// instead of the discrete MouseScrollUp/MouseScrollDown key events.
+	const float WheelAxis = GetInputAnalogKeyState(EKeys::MouseWheelAxis);
+	if (!FMath::IsNearlyZero(WheelAxis, KINDA_SMALL_NUMBER))
+	{
+		DesiredCameraDistance -= WheelAxis * MouseWheelZoomStep;
+	}
+
 	DesiredCameraDistance = FMath::Clamp(DesiredCameraDistance, MinCameraDistance, MaxCameraDistance);
 	SpringArm->TargetArmLength = FMath::FInterpTo(
 		SpringArm->TargetArmLength,

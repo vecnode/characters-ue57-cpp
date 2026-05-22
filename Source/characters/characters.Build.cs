@@ -17,6 +17,7 @@ public class characters : ModuleRules
 			"AIModule",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
+			"HTTPServer",
 			"UMG",
 			"Slate"
 		});
