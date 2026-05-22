@@ -1,49 +1,101 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "charactersGameMode.h"
-#include "characters.h"
 #include "charactersMHPlayer.h"
-#include "UObject/ConstructorHelpers.h"
+#include "charactersPlayerController.h"
+#include "characters.h"
+#include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"
+#include "GameFramework/SpectatorPawn.h"
 
 AcharactersGameMode::AcharactersGameMode()
 {
-	// Always keep a native fallback so PIE never drops to spectator/fly view
-	// when a BP asset path is missing or fails to load.
+	// Keep a native pawn as spawn fallback; placed actors are preferred (see RestartPlayer).
 	DefaultPawnClass = AcharactersMHPlayer::StaticClass();
+	PlayerControllerClass = AcharactersPlayerController::StaticClass();
+}
 
-	// Bulletproof default pawn: always try to spawn BP_character2 in gameplay.
-	static ConstructorHelpers::FClassFinder<APawn> PlayerPawnBPClass(
-		TEXT("/Game/MetaHumans/character2/BP_character2"));
+void AcharactersGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)
+{
+	// Always attempt possession logic for players when PIE starts.
+	RestartPlayer(NewPlayer);
+}
 
-	if (PlayerPawnBPClass.Class != nullptr)
+void AcharactersGameMode::RestartPlayer(AController* NewPlayer)
+{
+	if (!NewPlayer)
 	{
-		DefaultPawnClass = PlayerPawnBPClass.Class;
-	}
-	else
-	{
-		UE_LOG(Logcharacters, Warning,
-			TEXT("charactersGameMode: Could not load /Game/MetaHumans/character2/BP_character2. Using native AcharactersMHPlayer fallback."));
+		return;
 	}
 
-	// Use the existing third person controller BP so Enhanced Input mapping contexts
-	// configured in the editor continue to apply.
-	static ConstructorHelpers::FClassFinder<APlayerController> PlayerControllerBPClass(
-		TEXT("/Game/ThirdPerson/Blueprints/BP_ThirdPersonPlayerController"));
-
-	if (PlayerControllerBPClass.Class != nullptr)
+	// Resolve optional class filter for placed pawn selection.
+	UClass* PreferredClass = nullptr;
+	if (!PreferredPlacedPawnClass.IsNull())
 	{
-		PlayerControllerClass = PlayerControllerBPClass.Class;
+		PreferredClass = PreferredPlacedPawnClass.LoadSynchronous();
 	}
+
+	APawn* TaggedPawn = nullptr;
+	APawn* PreferredClassPawn = nullptr;
+	APawn* FirstUsablePawn = nullptr;
+
+	for (TActorIterator<APawn> It(GetWorld()); It; ++It)
+	{
+		APawn* Candidate = *It;
+		if (!IsValid(Candidate))
+		{
+			continue;
+		}
+
+		if (Candidate->GetController() != nullptr || Candidate->IsPlayerControlled())
+		{
+			continue;
+		}
+
+		if (Candidate->IsA<ASpectatorPawn>())
+		{
+			continue;
+		}
+
+		if (Candidate->ActorHasTag(PreferredPlacedPawnTag))
+		{
+			TaggedPawn = Candidate;
+			break;
+		}
+
+		if (!PreferredClassPawn && PreferredClass && Candidate->IsA(PreferredClass))
+		{
+			PreferredClassPawn = Candidate;
+		}
+
+		if (!FirstUsablePawn)
+		{
+			FirstUsablePawn = Candidate;
+		}
+	}
+
+	APawn* SelectedPawn = TaggedPawn ? TaggedPawn : (PreferredClassPawn ? PreferredClassPawn : FirstUsablePawn);
+
+	if (SelectedPawn)
+	{
+		NewPlayer->Possess(SelectedPawn);
+		UE_LOG(Logcharacters, Log,
+			TEXT("charactersGameMode: Possessed existing level pawn '%s' (%s). Tag=%s ClassFilter=%s"),
+			*SelectedPawn->GetName(),
+			*SelectedPawn->GetClass()->GetName(),
+			*PreferredPlacedPawnTag.ToString(),
+			*GetNameSafe(PreferredClass));
+		return;
+	}
+
+	// No placed character found — fall back to spawning.
+	UE_LOG(Logcharacters, Warning,
+		TEXT("charactersGameMode: No unpossessed placed APawn found in level. Falling back to spawn."));
+	Super::RestartPlayer(NewPlayer);
 }
 
 void AcharactersGameMode::BeginPlay()
 {
 	Super::BeginPlay();
-
-	UE_LOG(Logcharacters, Log,
-		TEXT("charactersGameMode: DefaultPawnClass=%s, PlayerControllerClass=%s"),
-		*GetNameSafe(DefaultPawnClass),
-		*GetNameSafe(PlayerControllerClass));
 }

@@ -7,6 +7,8 @@
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
 #include "characters.h"
+#include "Camera/CameraComponent.h"
+#include "GameFramework/SpringArmComponent.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 namespace
@@ -15,6 +17,44 @@ namespace
 	{
 		return Cast<UInputMappingContext>(StaticLoadObject(UInputMappingContext::StaticClass(), nullptr, AssetPath));
 	}
+}
+
+void AcharactersPlayerController::OnPossess(APawn* InPawn)
+{
+	Super::OnPossess(InPawn);
+
+	if (!InPawn)
+	{
+		return;
+	}
+
+	// Find spring arm and camera on the newly possessed pawn.
+	// Works for any character (Blueprint MetaHuman, AcharactersCharacter subclass, etc.)
+	USpringArmComponent* SpringArm = InPawn->FindComponentByClass<USpringArmComponent>();
+	UCameraComponent* FollowCam   = InPawn->FindComponentByClass<UCameraComponent>();
+
+	if (SpringArm)
+	{
+		SpringArm->bUsePawnControlRotation = true;
+		SpringArm->bDoCollisionTest        = false;
+	}
+
+	if (FollowCam)
+	{
+		FollowCam->bUsePawnControlRotation = false;
+		FollowCam->Activate();
+	}
+
+	// Disable auto camera management so UE does not fight our view target.
+	bAutoManageActiveCameraTarget = false;
+	SetViewTargetWithBlend(InPawn, 0.0f);
+
+	UE_LOG(Logcharacters, Log,
+		TEXT("AcharactersPlayerController: Possessed '%s' (%s). SpringArm=%s Camera=%s."),
+		*GetNameSafe(InPawn),
+		*InPawn->GetClass()->GetName(),
+		SpringArm ? TEXT("found") : TEXT("MISSING"),
+		FollowCam  ? TEXT("found") : TEXT("MISSING"));
 }
 
 void AcharactersPlayerController::BeginPlay()

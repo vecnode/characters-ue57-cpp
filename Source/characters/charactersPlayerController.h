@@ -13,7 +13,7 @@ class UUserWidget;
  *  Basic PlayerController class for a third person game
  *  Manages input mappings
  */
-UCLASS(abstract)
+UCLASS()
 class AcharactersPlayerController : public APlayerController
 {
 	GENERATED_BODY()
@@ -42,6 +42,9 @@ protected:
 
 	/** Gameplay initialization */
 	virtual void BeginPlay() override;
+
+	/** Called when this controller possesses a new pawn. Sets up third-person camera. */
+	virtual void OnPossess(APawn* InPawn) override;
 
 	/** Input mapping context setup */
 	virtual void SetupInputComponent() override;
