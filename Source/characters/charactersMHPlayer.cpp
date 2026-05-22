@@ -56,7 +56,7 @@ namespace
 		DesiredSpringArm->bUsePawnControlRotation = true;
 		DesiredSpringArm->TargetArmLength = 200.0f;
 		DesiredSpringArm->bDoCollisionTest = false;
-		DesiredSpringArm->SocketOffset = FVector(0.0f, 0.0f, 10.0f);
+		DesiredSpringArm->SocketOffset = FVector(0.0f, 0.0f, 70.0f);
 		DesiredCamera->bUsePawnControlRotation = false;
 		DesiredCamera->Activate();
 	}

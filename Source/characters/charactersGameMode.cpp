@@ -108,6 +108,13 @@ namespace
 		DriverMesh->SetOnlyOwnerSee(false);
 		DriverMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
 
+		// DEBUG: log every source mesh component found and whether it receives leader-pose.
+		UE_LOG(Logcharacters, Log,
+			TEXT("SetupProxyVisuals: DriverMesh mesh='%s' anim='%s' skeleton='%s'"),
+			*GetNameSafe(DriverMesh->GetSkeletalMeshAsset()),
+			*GetNameSafe(DriverMesh->GetAnimClass()),
+			DriverMesh->GetSkeletalMeshAsset() ? *GetNameSafe(DriverMesh->GetSkeletalMeshAsset()->GetSkeleton()) : TEXT("none"));
+
 		// Make compatible source meshes follow the pawn animation driver.
 		if (DriverMesh->GetSkeletalMeshAsset() && DriverMesh->GetSkeletalMeshAsset()->GetSkeleton())
 		{
@@ -120,10 +127,19 @@ namespace
 				}
 
 				USkeleton* SourceSkeleton = SourceMesh->GetSkeletalMeshAsset()->GetSkeleton();
-				if (SourceSkeleton == DriverSkeleton)
+				const bool bSameSkelly = (SourceSkeleton == DriverSkeleton);
+				if (bSameSkelly)
 				{
 					SourceMesh->SetLeaderPoseComponent(DriverMesh);
 				}
+
+				UE_LOG(Logcharacters, Log,
+					TEXT("SetupProxyVisuals:   Mesh='%s' comp='%s' skeleton='%s' HasAnimClass=%d LeaderPoseSet=%d"),
+					*GetNameSafe(SourceMesh->GetSkeletalMeshAsset()),
+					*GetNameSafe(SourceMesh),
+					*GetNameSafe(SourceSkeleton),
+					SourceMesh->GetAnimClass() != nullptr ? 1 : 0,
+					bSameSkelly ? 1 : 0);
 			}
 		}
 	}

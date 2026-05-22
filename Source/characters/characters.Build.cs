@@ -24,20 +24,7 @@ public class characters : ModuleRules
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 
 		PublicIncludePaths.AddRange(new string[] {
-			"characters",
-			"characters/Variant_Platforming",
-			"characters/Variant_Platforming/Animation",
-			"characters/Variant_Combat",
-			"characters/Variant_Combat/AI",
-			"characters/Variant_Combat/Animation",
-			"characters/Variant_Combat/Gameplay",
-			"characters/Variant_Combat/Interfaces",
-			"characters/Variant_Combat/UI",
-			"characters/Variant_SideScrolling",
-			"characters/Variant_SideScrolling/AI",
-			"characters/Variant_SideScrolling/Gameplay",
-			"characters/Variant_SideScrolling/Interfaces",
-			"characters/Variant_SideScrolling/UI"
+			"characters"
 		});
 
 		// Uncomment if you are using Slate UI
