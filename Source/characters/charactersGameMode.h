@@ -33,6 +33,21 @@ protected:
 	/** Optional actor tag used to pick a specific placed pawn (for example: PlayerCharacter). */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
 	FName PreferredPlacedPawnTag = TEXT("PlayerCharacter");
+
+	/** Optional actor name/label from the World Outliner to pick first (for example: MAIN_CHARACTER). */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
+	FString PreferredPlacedPawnName = TEXT("MAIN_CHARACTER");
+
+	/** If false, no pawn is spawned when a placed pawn cannot be found. */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
+	bool bAllowSpawnFallback = false;
+
+	/**
+	 * If the preferred named actor exists but is not a Pawn, spawn a controllable pawn
+	 * at that actor transform and hide the original actor to avoid a static duplicate.
+	 */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
+	bool bSpawnFromPreferredNamedActorIfNotPawn = true;
 };
 
 
