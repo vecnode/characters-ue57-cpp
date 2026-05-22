@@ -46,26 +46,85 @@ namespace
 		return false;
 	}
 
-	void HideAllPawnSkeletalMeshes(APawn* Pawn)
+	void SetupProxyVisualsFromSourceActor(AActor* SourceActor, APawn* TargetPawn)
 	{
-		if (!Pawn)
+		if (!SourceActor || !TargetPawn)
 		{
 			return;
 		}
 
-		TInlineComponentArray<USkeletalMeshComponent*> MeshComponents;
-		Pawn->GetComponents(MeshComponents);
-		for (USkeletalMeshComponent* MeshComp : MeshComponents)
+		ACharacter* TargetCharacter = Cast<ACharacter>(TargetPawn);
+		USkeletalMeshComponent* DriverMesh = TargetCharacter ? TargetCharacter->GetMesh() : nullptr;
+
+		// Keep the original actor as the visible character proxy and preserve its placed offset on attach.
+		SourceActor->AttachToActor(TargetPawn, FAttachmentTransformRules::KeepWorldTransform);
+		SourceActor->SetActorHiddenInGame(false);
+		SourceActor->SetActorEnableCollision(false);
+		SourceActor->SetActorTickEnabled(true);
+
+		if (!DriverMesh)
 		{
-			if (!MeshComp)
+			return;
+		}
+
+		TInlineComponentArray<USkeletalMeshComponent*> SourceMeshes;
+		SourceActor->GetComponents(SourceMeshes);
+
+		// Configure the hidden pawn mesh as animation driver using a source mesh from MAIN_CHARACTER.
+		USkeletalMeshComponent* SourceDriver = nullptr;
+		for (USkeletalMeshComponent* SourceMesh : SourceMeshes)
+		{
+			if (!SourceMesh || !SourceMesh->GetSkeletalMeshAsset())
 			{
 				continue;
 			}
 
-			MeshComp->SetVisibility(false, true);
-			MeshComp->SetHiddenInGame(true, true);
-			MeshComp->SetOwnerNoSee(true);
-			MeshComp->SetOnlyOwnerSee(false);
+			const bool bHasAnimClass = (SourceMesh->GetAnimClass() != nullptr);
+			if (!SourceDriver || bHasAnimClass)
+			{
+				SourceDriver = SourceMesh;
+			}
+
+			if (bHasAnimClass)
+			{
+				break;
+			}
+		}
+
+		if (SourceDriver)
+		{
+			DriverMesh->SetSkeletalMeshAsset(SourceDriver->GetSkeletalMeshAsset());
+			DriverMesh->SetRelativeTransform(SourceDriver->GetRelativeTransform());
+			DriverMesh->SetAnimationMode(SourceDriver->GetAnimationMode());
+			if (SourceDriver->GetAnimClass())
+			{
+				DriverMesh->SetAnimInstanceClass(SourceDriver->GetAnimClass());
+			}
+		}
+
+		DriverMesh->SetVisibility(false, true);
+		DriverMesh->SetHiddenInGame(true, true);
+		DriverMesh->SetOwnerNoSee(true);
+		DriverMesh->SetOnlyOwnerSee(false);
+		DriverMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+
+		// Make compatible source meshes follow the pawn animation driver.
+		if (DriverMesh->GetSkeletalMeshAsset() && DriverMesh->GetSkeletalMeshAsset()->GetSkeleton())
+		{
+			USkeleton* DriverSkeleton = DriverMesh->GetSkeletalMeshAsset()->GetSkeleton();
+			for (USkeletalMeshComponent* SourceMesh : SourceMeshes)
+			{
+				if (!SourceMesh || !SourceMesh->GetSkeletalMeshAsset())
+				{
+					continue;
+				}
+
+				USkeleton* SourceSkeleton = SourceMesh->GetSkeletalMeshAsset()->GetSkeleton();
+				if (SourceSkeleton == DriverSkeleton)
+				{
+					SourceMesh->SetLeaderPoseComponent(DriverMesh);
+				}
+			}
 		}
 	}
 }
@@ -196,18 +255,11 @@ void AcharactersGameMode::RestartPlayer(AController* NewPlayer)
 			{
 				if (APawn* SpawnedPawn = World->SpawnActor<APawn>(SpawnClass, SpawnTransform, SpawnParams))
 				{
-					// Keep the original non-pawn character visual in the world and make it follow the pawn.
-					// This preserves full MetaHuman component setup (body/face/hair/clothes) without partial copy artifacts.
-					PreferredNamedNonPawnActor->AttachToActor(SpawnedPawn, FAttachmentTransformRules::KeepWorldTransform);
-					PreferredNamedNonPawnActor->SetActorHiddenInGame(false);
-					PreferredNamedNonPawnActor->SetActorTickEnabled(true);
-
-					// Avoid visual duplicates: hide skeletal meshes on the spawned control pawn.
-					HideAllPawnSkeletalMeshes(SpawnedPawn);
+					SetupProxyVisualsFromSourceActor(PreferredNamedNonPawnActor, SpawnedPawn);
 
 					NewPlayer->Possess(SpawnedPawn);
 					UE_LOG(Logcharacters, Warning,
-						TEXT("charactersGameMode: Preferred actor '%s' (%s) is not a Pawn. Spawned '%s', attached preferred actor for visuals, and possessed the pawn."),
+						TEXT("charactersGameMode: Preferred actor '%s' (%s) is not a Pawn. Spawned '%s', configured proxy visuals, and possessed it."),
 						*PreferredNamedNonPawnActor->GetName(),
 						*PreferredNamedNonPawnActor->GetClass()->GetName(),
 						*SpawnedPawn->GetName());
