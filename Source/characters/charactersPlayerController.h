@@ -66,11 +66,11 @@ protected:
 
 	/** Minimum zoom-in camera distance. */
 	UPROPERTY(EditAnywhere, Category = "Camera|Zoom")
-	float MinCameraDistance = 60.0f;
+	float MinCameraDistance = 40.0f;
 
 	/** Maximum zoom-out camera distance. */
 	UPROPERTY(EditAnywhere, Category = "Camera|Zoom")
-	float MaxCameraDistance = 500.0f;
+	float MaxCameraDistance = 1500.0f;
 
 	/** Distance change per mouse wheel notch. */
 	UPROPERTY(EditAnywhere, Category = "Camera|Zoom")
@@ -82,5 +82,23 @@ protected:
 
 	/** Desired camera boom distance, updated by mouse wheel. */
 	float DesiredCameraDistance = -1.0f;
+
+	/** One-shot runtime diagnostic flag for movement/animation wiring. */
+	bool bLoggedMovementAnimDiagnostics = false;
+
+	/** True while collecting a short movement telemetry window. */
+	bool bMovementProbeActive = false;
+
+	/** Elapsed time for the active movement telemetry window. */
+	float MovementProbeElapsed = 0.0f;
+
+	/** Highest sampled horizontal speed in the telemetry window. */
+	float MovementProbePeakSpeed2D = 0.0f;
+
+	/** Highest sampled acceleration magnitude in the telemetry window. */
+	float MovementProbePeakAcceleration2D = 0.0f;
+
+	/** Sample count collected in the telemetry window. */
+	int32 MovementProbeSampleCount = 0;
 
 };

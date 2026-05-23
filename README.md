@@ -2,7 +2,7 @@
 
 UE 5.7 C++ project for direct player possession of a placed MetaHuman Pawn/Character.
 
-Ongoing. AI not implemented yet. 
+Ongoing. AI not implemented yet. On VSCode press Ctrl + F5
 
 ## Required Level Setup
 - Place 1 Pawn/Character in the level named `MAIN_CHARACTER`.

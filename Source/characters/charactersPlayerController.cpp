@@ -8,6 +8,10 @@
 #include "Blueprint/UserWidget.h"
 #include "characters.h"
 #include "Camera/CameraComponent.h"
+#include "Components/CapsuleComponent.h"
+#include "Components/SkeletalMeshComponent.h"
+#include "GameFramework/Character.h"
+#include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "InputCoreTypes.h"
 #include "Widgets/Input/SVirtualJoystick.h"
@@ -60,6 +64,13 @@ void AcharactersPlayerController::OnPossess(APawn* InPawn)
 		return;
 	}
 
+	bLoggedMovementAnimDiagnostics = false;
+	bMovementProbeActive = false;
+	MovementProbeElapsed = 0.0f;
+	MovementProbePeakSpeed2D = 0.0f;
+	MovementProbePeakAcceleration2D = 0.0f;
+	MovementProbeSampleCount = 0;
+
 	// Find spring arm and camera on the newly possessed pawn.
 	// Works for any character (Blueprint MetaHuman, AcharactersCharacter subclass, etc.)
 	USpringArmComponent* SpringArm = InPawn->FindComponentByClass<USpringArmComponent>();
@@ -82,6 +93,99 @@ void AcharactersPlayerController::OnPossess(APawn* InPawn)
 	bAutoManageActiveCameraTarget = false;
 	SetViewTargetWithBlend(InPawn, 0.0f);
 
+	if (ACharacter* PossessedCharacter = Cast<ACharacter>(InPawn))
+	{
+		TInlineComponentArray<USkeletalMeshComponent*> SkeletalMeshes;
+		PossessedCharacter->GetComponents(SkeletalMeshes);
+
+		USkeletalMeshComponent* DrivingBodyMesh = nullptr;
+		for (USkeletalMeshComponent* MeshComp : SkeletalMeshes)
+		{
+			if (!MeshComp || !MeshComp->GetSkeletalMeshAsset())
+			{
+				continue;
+			}
+
+			if (MeshComp->GetAnimInstance())
+			{
+				DrivingBodyMesh = MeshComp;
+				if (MeshComp->GetFName() == TEXT("Body"))
+				{
+					break;
+				}
+			}
+		}
+
+		if (DrivingBodyMesh)
+		{
+			DrivingBodyMesh->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+			DrivingBodyMesh->bEnableUpdateRateOptimizations = false;
+		}
+
+		for (USkeletalMeshComponent* MeshComp : SkeletalMeshes)
+		{
+			if (!MeshComp)
+			{
+				continue;
+			}
+
+			if (MeshComp->GetCollisionEnabled() != ECollisionEnabled::NoCollision)
+			{
+				UE_LOG(Logcharacters, Warning,
+					TEXT("MovementGuard: '%s' mesh '%s' had collision enabled (%d); forcing NoCollision to avoid movement drag."),
+					*GetNameSafe(PossessedCharacter),
+					*GetNameSafe(MeshComp),
+					static_cast<int32>(MeshComp->GetCollisionEnabled()));
+				MeshComp->SetCollisionEnabled(ECollisionEnabled::NoCollision);
+			}
+
+			if (MeshComp->GetGenerateOverlapEvents())
+			{
+				MeshComp->SetGenerateOverlapEvents(false);
+			}
+
+			if (DrivingBodyMesh && MeshComp != DrivingBodyMesh && MeshComp->GetSkeletalMeshAsset() && DrivingBodyMesh->GetSkeletalMeshAsset())
+			{
+				const USkeleton* MeshSkeleton = MeshComp->GetSkeletalMeshAsset()->GetSkeleton();
+				const USkeleton* BodySkeleton = DrivingBodyMesh->GetSkeletalMeshAsset()->GetSkeleton();
+				const bool bSharesBodySkeleton = (MeshSkeleton && BodySkeleton && MeshSkeleton == BodySkeleton);
+
+				if (bSharesBodySkeleton && MeshComp->GetAnimInstance() == nullptr)
+				{
+					MeshComp->VisibilityBasedAnimTickOption = EVisibilityBasedAnimTickOption::AlwaysTickPoseAndRefreshBones;
+					MeshComp->bEnableUpdateRateOptimizations = false;
+					MeshComp->SetLeaderPoseComponent(DrivingBodyMesh, true, true);
+					UE_LOG(Logcharacters, Warning,
+						TEXT("MovementGuard: '%s' mesh '%s' now follows '%s' via LeaderPose (same skeleton, no anim instance, follower ticks pose)."),
+						*GetNameSafe(PossessedCharacter),
+						*GetNameSafe(MeshComp),
+						*GetNameSafe(DrivingBodyMesh));
+				}
+			}
+		}
+
+		if (UCharacterMovementComponent* MovementComp = PossessedCharacter->GetCharacterMovement())
+		{
+			if (MovementComp->MaxWalkSpeed < 150.0f)
+			{
+				UE_LOG(Logcharacters, Warning,
+					TEXT("MovementGuard: '%s' MaxWalkSpeed was %.2f; clamping to 350.00 to keep locomotion out of idle band."),
+					*GetNameSafe(PossessedCharacter),
+					MovementComp->MaxWalkSpeed);
+				MovementComp->MaxWalkSpeed = 350.0f;
+			}
+
+			if (MovementComp->MaxAcceleration < 500.0f)
+			{
+				UE_LOG(Logcharacters, Warning,
+					TEXT("MovementGuard: '%s' MaxAcceleration was %.2f; clamping to 2048.00."),
+					*GetNameSafe(PossessedCharacter),
+					MovementComp->MaxAcceleration);
+				MovementComp->MaxAcceleration = 2048.0f;
+			}
+		}
+	}
+
 	UE_LOG(Logcharacters, Log,
 		TEXT("AcharactersPlayerController: Possessed '%s' (%s). SpringArm=%s Camera=%s."),
 		*GetNameSafe(InPawn),
@@ -103,6 +207,176 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 	if (!ControlledPawn)
 	{
 		return;
+	}
+
+	if (!bLoggedMovementAnimDiagnostics)
+	{
+		const float Speed2D = ControlledPawn->GetVelocity().Size2D();
+		if (Speed2D > 10.0f)
+		{
+			if (ACharacter* ControlledCharacter = Cast<ACharacter>(ControlledPawn))
+			{
+				if (UCharacterMovementComponent* MovementComp = ControlledCharacter->GetCharacterMovement())
+				{
+					UE_LOG(Logcharacters, Log,
+						TEXT("MovementDiag: Pawn='%s' MaxWalkSpeed=%.2f MaxAcceleration=%.2f InputPending=%.3f InputLast=%.3f MovementMode=%d"),
+						*GetNameSafe(ControlledPawn),
+						MovementComp->MaxWalkSpeed,
+						MovementComp->MaxAcceleration,
+						ControlledCharacter->GetPendingMovementInputVector().Size(),
+						ControlledCharacter->GetLastMovementInputVector().Size(),
+						static_cast<int32>(MovementComp->MovementMode));
+
+					const UCapsuleComponent* CapsuleComp = ControlledCharacter->GetCapsuleComponent();
+					if (CapsuleComp)
+					{
+						const float CapsuleHalfHeight = CapsuleComp->GetScaledCapsuleHalfHeight();
+						const float CapsuleBottomZ = CapsuleComp->GetComponentLocation().Z - CapsuleHalfHeight;
+
+						USkeletalMeshComponent* BodyMesh = nullptr;
+						TInlineComponentArray<USkeletalMeshComponent*> SkeletalMeshes;
+						ControlledCharacter->GetComponents(SkeletalMeshes);
+						for (USkeletalMeshComponent* MeshComp : SkeletalMeshes)
+						{
+							if (!MeshComp)
+							{
+								continue;
+							}
+
+							if (MeshComp->GetFName() == TEXT("Body"))
+							{
+								BodyMesh = MeshComp;
+								break;
+							}
+
+							if (!BodyMesh && MeshComp->GetAnimInstance())
+							{
+								BodyMesh = MeshComp;
+							}
+						}
+
+						if (BodyMesh)
+						{
+							const FBoxSphereBounds MeshBounds = BodyMesh->Bounds;
+							const float MeshFeetWorldZ = MeshBounds.Origin.Z - MeshBounds.BoxExtent.Z;
+							const float MeshFeetVsCapsuleBottom = MeshFeetWorldZ - CapsuleBottomZ;
+
+							UE_LOG(Logcharacters, Warning,
+								TEXT("GroundDiag: Pawn='%s' CapsuleHalfHeight=%.2f CapsuleBottomZ=%.2f BodyRelZ=%.2f BodyWorldZ=%.2f MeshFeetWorldZ=%.2f MeshFeetVsCapsuleBottom=%.2f FloorDist=%.2f LineDist=%.2f bWalkable=%s"),
+								*GetNameSafe(ControlledCharacter),
+								CapsuleHalfHeight,
+								CapsuleBottomZ,
+								BodyMesh->GetRelativeLocation().Z,
+								BodyMesh->GetComponentLocation().Z,
+								MeshFeetWorldZ,
+								MeshFeetVsCapsuleBottom,
+								MovementComp->CurrentFloor.FloorDist,
+								MovementComp->CurrentFloor.LineDist,
+								MovementComp->CurrentFloor.IsWalkableFloor() ? TEXT("true") : TEXT("false"));
+						}
+					}
+				}
+			}
+
+			UE_LOG(Logcharacters, Log,
+				TEXT("AnimDiag: Pawn='%s' Speed2D=%.2f"),
+				*GetNameSafe(ControlledPawn),
+				Speed2D);
+
+			TInlineComponentArray<USkeletalMeshComponent*> SkeletalMeshes;
+			ControlledPawn->GetComponents(SkeletalMeshes);
+
+			for (int32 MeshIndex = 0; MeshIndex < SkeletalMeshes.Num(); ++MeshIndex)
+			{
+				USkeletalMeshComponent* MeshComp = SkeletalMeshes[MeshIndex];
+				if (!MeshComp)
+				{
+					continue;
+				}
+
+				const TCHAR* AnimationModeLabel = TEXT("Unknown");
+				switch (MeshComp->GetAnimationMode())
+				{
+				case EAnimationMode::AnimationBlueprint:
+					AnimationModeLabel = TEXT("AnimationBlueprint");
+					break;
+				case EAnimationMode::AnimationSingleNode:
+					AnimationModeLabel = TEXT("AnimationSingleNode");
+					break;
+				case EAnimationMode::AnimationCustomMode:
+					AnimationModeLabel = TEXT("AnimationCustomMode");
+					break;
+				default:
+					break;
+				}
+
+				UE_LOG(Logcharacters, Log,
+					TEXT("AnimDiagMesh[%d]: Comp='%s' Visible=%s Mesh='%s' Skeleton='%s' AnimMode=%s AnimClass='%s' AnimInstance='%s'"),
+					MeshIndex,
+					*GetNameSafe(MeshComp),
+					MeshComp->IsVisible() ? TEXT("true") : TEXT("false"),
+					*GetNameSafe(MeshComp->GetSkeletalMeshAsset()),
+					(MeshComp->GetSkeletalMeshAsset() && MeshComp->GetSkeletalMeshAsset()->GetSkeleton()) ? *GetNameSafe(MeshComp->GetSkeletalMeshAsset()->GetSkeleton()) : TEXT("none"),
+					AnimationModeLabel,
+					*GetNameSafe(MeshComp->GetAnimClass()),
+					MeshComp->GetAnimInstance() ? *MeshComp->GetAnimInstance()->GetClass()->GetName() : TEXT("none"));
+			}
+
+			bLoggedMovementAnimDiagnostics = true;
+		}
+	}
+
+	if (ACharacter* ControlledCharacter = Cast<ACharacter>(ControlledPawn))
+	{
+		if (UCharacterMovementComponent* MovementComp = ControlledCharacter->GetCharacterMovement())
+		{
+			const float PendingInput = ControlledCharacter->GetPendingMovementInputVector().Size();
+			const float LastInput = ControlledCharacter->GetLastMovementInputVector().Size();
+			const float InputMagnitude = FMath::Max(PendingInput, LastInput);
+
+			if (!bMovementProbeActive && InputMagnitude > 0.9f)
+			{
+				bMovementProbeActive = true;
+				MovementProbeElapsed = 0.0f;
+				MovementProbePeakSpeed2D = 0.0f;
+				MovementProbePeakAcceleration2D = 0.0f;
+				MovementProbeSampleCount = 0;
+			}
+
+			if (bMovementProbeActive)
+			{
+				const float Speed2D = ControlledPawn->GetVelocity().Size2D();
+				const float Accel2D = MovementComp->GetCurrentAcceleration().Size2D();
+				MovementProbePeakSpeed2D = FMath::Max(MovementProbePeakSpeed2D, Speed2D);
+				MovementProbePeakAcceleration2D = FMath::Max(MovementProbePeakAcceleration2D, Accel2D);
+				MovementProbeElapsed += DeltaTime;
+				++MovementProbeSampleCount;
+
+				const bool bStopWindow = (MovementProbeElapsed >= 2.0f) || (InputMagnitude < 0.1f);
+				if (bStopWindow)
+				{
+					UE_LOG(Logcharacters, Warning,
+						TEXT("MovementProbe: Pawn='%s' Duration=%.2fs Samples=%d Input=%.3f SpeedNow=%.2f SpeedPeak=%.2f MaxWalkSpeed=%.2f MaxSpeed=%.2f AccelPeak=%.2f MaxAcceleration=%.2f BrakingDecelWalk=%.2f GroundFriction=%.2f BrakingFriction=%.2f BrakingFrictionFactor=%.2f MovementMode=%d"),
+						*GetNameSafe(ControlledPawn),
+						MovementProbeElapsed,
+						MovementProbeSampleCount,
+						InputMagnitude,
+						Speed2D,
+						MovementProbePeakSpeed2D,
+						MovementComp->MaxWalkSpeed,
+						MovementComp->GetMaxSpeed(),
+						MovementProbePeakAcceleration2D,
+						MovementComp->GetMaxAcceleration(),
+						MovementComp->BrakingDecelerationWalking,
+						MovementComp->GroundFriction,
+						MovementComp->BrakingFriction,
+						MovementComp->BrakingFrictionFactor,
+						static_cast<int32>(MovementComp->MovementMode));
+
+					bMovementProbeActive = false;
+				}
+			}
+		}
 	}
 
 	USpringArmComponent* SpringArm = ControlledPawn->FindComponentByClass<USpringArmComponent>();
