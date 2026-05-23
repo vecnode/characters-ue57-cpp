@@ -85,21 +85,27 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 		DesiredCameraDistance = FMath::Clamp(SpringArm->TargetArmLength, MinCameraDistance, MaxCameraDistance);
 	}
 
+	bool bConsumedDiscreteWheelInput = false;
 	if (WasInputKeyJustPressed(EKeys::MouseScrollUp))
 	{
 		DesiredCameraDistance -= MouseWheelZoomStep;
+		bConsumedDiscreteWheelInput = true;
 	}
 	if (WasInputKeyJustPressed(EKeys::MouseScrollDown))
 	{
 		DesiredCameraDistance += MouseWheelZoomStep;
+		bConsumedDiscreteWheelInput = true;
 	}
 
 	// Standalone/shipping builds often report wheel movement through axis input
 	// instead of the discrete MouseScrollUp/MouseScrollDown key events.
-	const float WheelAxis = GetInputAnalogKeyState(EKeys::MouseWheelAxis);
-	if (!FMath::IsNearlyZero(WheelAxis, KINDA_SMALL_NUMBER))
+	if (!bConsumedDiscreteWheelInput)
 	{
-		DesiredCameraDistance -= WheelAxis * MouseWheelZoomStep;
+		const float WheelAxis = GetInputAnalogKeyState(EKeys::MouseWheelAxis);
+		if (!FMath::IsNearlyZero(WheelAxis, KINDA_SMALL_NUMBER))
+		{
+			DesiredCameraDistance -= WheelAxis * MouseWheelZoomStep;
+		}
 	}
 
 	DesiredCameraDistance = FMath::Clamp(DesiredCameraDistance, MinCameraDistance, MaxCameraDistance);

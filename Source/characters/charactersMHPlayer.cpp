@@ -3,11 +3,8 @@
 #include "charactersMHPlayer.h"
 #include "charactersGameInstance.h"
 #include "characters.h"
-#include "Camera/CameraComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
-#include "GameFramework/PlayerController.h"
-#include "GameFramework/SpringArmComponent.h"
 
 namespace
 {
@@ -34,70 +31,11 @@ namespace
 			MoveComp->BrakingDecelerationFalling = 1500.0f;
 		}
 	}
-
-	void EnsureThirdPersonCameraActive(AcharactersMHPlayer* Player)
-	{
-		if (!Player)
-		{
-			return;
-		}
-
-		USpringArmComponent* DesiredSpringArm = Player->GetCameraBoom();
-		UCameraComponent* DesiredCamera = Player->GetFollowCamera();
-
-		if (!DesiredSpringArm || !DesiredCamera)
-		{
-			UE_LOG(Logcharacters, Warning,
-				TEXT("charactersMHPlayer: Missing CameraBoom or FollowCamera on '%s'."),
-				*GetNameSafe(Player));
-			return;
-		}
-
-		DesiredSpringArm->bUsePawnControlRotation = true;
-		DesiredSpringArm->TargetArmLength = 200.0f;
-		DesiredSpringArm->bDoCollisionTest = false;
-		DesiredSpringArm->SocketOffset = FVector(0.0f, 0.0f, 70.0f);
-		DesiredCamera->bUsePawnControlRotation = false;
-		DesiredCamera->Activate();
-	}
 }
 
 AcharactersMHPlayer::AcharactersMHPlayer()
 {
-	PrimaryActorTick.bCanEverTick = true;
-}
-
-void AcharactersMHPlayer::Tick(float DeltaSeconds)
-{
-	Super::Tick(DeltaSeconds);
-
-	if (CameraEnforceRemainingSeconds > 0.0f)
-	{
-		EnsureThirdPersonCameraActive(this);
-		CameraEnforceRemainingSeconds -= DeltaSeconds;
-	}
-}
-
-void AcharactersMHPlayer::CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult)
-{
-	if (USpringArmComponent* ActiveCameraBoom = GetCameraBoom())
-	{
-		const FTransform SocketTransform = ActiveCameraBoom->GetSocketTransform(USpringArmComponent::SocketName, RTS_World);
-		OutResult.Location = SocketTransform.GetLocation();
-		OutResult.Rotation = SocketTransform.Rotator();
-
-		if (UCameraComponent* ActiveFollowCamera = GetFollowCamera())
-		{
-			OutResult.FOV = ActiveFollowCamera->FieldOfView;
-			OutResult.PostProcessBlendWeight = ActiveFollowCamera->PostProcessBlendWeight;
-			OutResult.PostProcessSettings = ActiveFollowCamera->PostProcessSettings;
-		}
-
-		OutResult.bConstrainAspectRatio = false;
-		return;
-	}
-
-	Super::CalcCamera(DeltaTime, OutResult);
+	PrimaryActorTick.bCanEverTick = false;
 }
 
 void AcharactersMHPlayer::BeginPlay()
@@ -105,23 +43,10 @@ void AcharactersMHPlayer::BeginPlay()
 	Super::BeginPlay();
 
 	ApplyDefaultThirdPersonMovement(this);
-	EnsureThirdPersonCameraActive(this);
 
 	if (UcharactersGameInstance* GI = UcharactersGameInstance::Get(this))
 	{
 		GI->ActivePlayerCharacter = this;
 	}
-}
-
-void AcharactersMHPlayer::PossessedBy(AController* NewController)
-{
-	Super::PossessedBy(NewController);
-	EnsureThirdPersonCameraActive(this);
-}
-
-void AcharactersMHPlayer::OnRep_Controller()
-{
-	Super::OnRep_Controller();
-	EnsureThirdPersonCameraActive(this);
 }
 

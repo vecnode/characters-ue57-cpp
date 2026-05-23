@@ -15,16 +15,8 @@ class AcharactersMHPlayer : public AcharactersCharacter
 public:
 
 	AcharactersMHPlayer();
-	virtual void Tick(float DeltaSeconds) override;
-	virtual void CalcCamera(float DeltaTime, FMinimalViewInfo& OutResult) override;
 
 protected:
 
 	virtual void BeginPlay() override;
-	virtual void PossessedBy(AController* NewController) override;
-	virtual void OnRep_Controller() override;
-
-private:
-
-	float CameraEnforceRemainingSeconds = 2.0f;
 };
