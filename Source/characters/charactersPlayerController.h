@@ -61,6 +61,9 @@ protected:
 	/** Input mapping context setup */
 	virtual void SetupInputComponent() override;
 
+	/** Requests application quit when Escape is pressed. */
+	void HandleEscapePressed();
+
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
 
@@ -85,6 +88,21 @@ protected:
 
 	/** One-shot runtime diagnostic flag for movement/animation wiring. */
 	bool bLoggedMovementAnimDiagnostics = false;
+
+	/** Enables raw keyboard fallback movement in case Enhanced Input mappings fail to initialize. */
+	UPROPERTY(EditAnywhere, Category = "Input|Fallback")
+	bool bEnableKeyboardFallbackMovement = true;
+
+	/** Enables raw mouse-delta look fallback in case Enhanced Input look mappings fail. */
+	UPROPERTY(EditAnywhere, Category = "Input|Fallback")
+	bool bEnableMouseFallbackLook = true;
+
+	/** Sensitivity multiplier for raw mouse look fallback. */
+	UPROPERTY(EditAnywhere, Category = "Input|Fallback", meta=(ClampMin="0.001", ClampMax="5.0"))
+	float MouseFallbackSensitivity = 0.15f;
+
+	/** Tracks whether any mapping context was successfully added this session. */
+	bool bAddedAnyMappingContext = false;
 
 	/** True while collecting a short movement telemetry window. */
 	bool bMovementProbeActive = false;

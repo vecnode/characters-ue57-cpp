@@ -1,6 +1,7 @@
 // Copyright Epic Games, Inc. All Rights Reserved.
 
 #include "charactersGameMode.h"
+#include "charactersHUD.h"
 #include "charactersMHPlayer.h"
 #include "charactersPlayerController.h"
 #include "characters.h"
@@ -69,6 +70,7 @@ AcharactersGameMode::AcharactersGameMode()
 	// Keep a native pawn as spawn fallback; placed actors are preferred (see RestartPlayer).
 	DefaultPawnClass = AcharactersMHPlayer::StaticClass();
 	PlayerControllerClass = AcharactersPlayerController::StaticClass();
+	HUDClass = AcharactersHUD::StaticClass();
 }
 
 void AcharactersGameMode::HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer)

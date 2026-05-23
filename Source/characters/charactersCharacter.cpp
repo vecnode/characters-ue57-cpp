@@ -13,6 +13,8 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
+#include "charactersGameInstance.h"
+#include "charactersHUD.h"
 #include "characters.h"
 
 namespace
@@ -184,12 +186,33 @@ void AcharactersCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 
 	// Bind debug key as an input event so it works even when actor tick is disabled.
 	PlayerInputComponent->BindKey(EKeys::H, IE_Pressed, this, &AcharactersCharacter::PrintHelloWorld);
+	PlayerInputComponent->BindKey(EKeys::W, IE_Pressed, this, &AcharactersCharacter::HandleMoveForwardPressed);
+	PlayerInputComponent->BindKey(EKeys::W, IE_Released, this, &AcharactersCharacter::HandleMoveForwardReleased);
+	PlayerInputComponent->BindKey(EKeys::S, IE_Pressed, this, &AcharactersCharacter::HandleMoveBackwardPressed);
+	PlayerInputComponent->BindKey(EKeys::S, IE_Released, this, &AcharactersCharacter::HandleMoveBackwardReleased);
+	PlayerInputComponent->BindKey(EKeys::A, IE_Pressed, this, &AcharactersCharacter::HandleMoveLeftPressed);
+	PlayerInputComponent->BindKey(EKeys::A, IE_Released, this, &AcharactersCharacter::HandleMoveLeftReleased);
+	PlayerInputComponent->BindKey(EKeys::D, IE_Pressed, this, &AcharactersCharacter::HandleMoveRightPressed);
+	PlayerInputComponent->BindKey(EKeys::D, IE_Released, this, &AcharactersCharacter::HandleMoveRightReleased);
+
+	PlayerInputComponent->BindKey(EKeys::Up, IE_Pressed, this, &AcharactersCharacter::HandleMoveForwardPressed);
+	PlayerInputComponent->BindKey(EKeys::Up, IE_Released, this, &AcharactersCharacter::HandleMoveForwardReleased);
+	PlayerInputComponent->BindKey(EKeys::Down, IE_Pressed, this, &AcharactersCharacter::HandleMoveBackwardPressed);
+	PlayerInputComponent->BindKey(EKeys::Down, IE_Released, this, &AcharactersCharacter::HandleMoveBackwardReleased);
+	PlayerInputComponent->BindKey(EKeys::Left, IE_Pressed, this, &AcharactersCharacter::HandleMoveLeftPressed);
+	PlayerInputComponent->BindKey(EKeys::Left, IE_Released, this, &AcharactersCharacter::HandleMoveLeftReleased);
+	PlayerInputComponent->BindKey(EKeys::Right, IE_Pressed, this, &AcharactersCharacter::HandleMoveRightPressed);
+	PlayerInputComponent->BindKey(EKeys::Right, IE_Released, this, &AcharactersCharacter::HandleMoveRightReleased);
+
+	PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &AcharactersCharacter::HandleJumpPressedFallback);
+	PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Released, this, &AcharactersCharacter::HandleJumpReleasedFallback);
 
 }
 
 void AcharactersCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
+	ApplyKeyboardMovementFallback();
 }
 
 void AcharactersCharacter::Move(const FInputActionValue& Value)
@@ -264,9 +287,97 @@ void AcharactersCharacter::PrintHelloWorld()
 	UE_LOG(Logcharacters, Log, TEXT("Hello World!"));
 	UE_LOG(Logcharacters, Log, TEXT("%s"), *PositionText);
 
+	if (APlayerController* PlayerController = Cast<APlayerController>(GetController()))
+	{
+		if (AcharactersHUD* charactersHUD = PlayerController->GetHUD<AcharactersHUD>())
+		{
+			charactersHUD->AddTransientMessage(TEXT("Hello World!"), FColor::Green, 2.0f);
+			charactersHUD->AddTransientMessage(PositionText, FColor::Yellow, 2.5f);
+
+			if (const UcharactersGameInstance* GI = UcharactersGameInstance::Get(this))
+			{
+				const FString ServerStatus = GI->GetLocalHttpServerStatusText();
+				charactersHUD->AddTransientMessage(ServerStatus, FColor::Cyan, 3.0f);
+				UE_LOG(Logcharacters, Log, TEXT("%s"), *ServerStatus);
+			}
+		}
+	}
+
+#if !UE_BUILD_SHIPPING
 	if (GEngine)
 	{
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Hello World!"));
 		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, PositionText);
+	}
+#endif
+}
+
+void AcharactersCharacter::HandleMoveForwardPressed()
+{
+	KeyboardForwardInput = 1.0f;
+}
+
+void AcharactersCharacter::HandleMoveForwardReleased()
+{
+	if (KeyboardForwardInput > 0.0f)
+	{
+		KeyboardForwardInput = 0.0f;
+	}
+}
+
+void AcharactersCharacter::HandleMoveBackwardPressed()
+{
+	KeyboardForwardInput = -1.0f;
+}
+
+void AcharactersCharacter::HandleMoveBackwardReleased()
+{
+	if (KeyboardForwardInput < 0.0f)
+	{
+		KeyboardForwardInput = 0.0f;
+	}
+}
+
+void AcharactersCharacter::HandleMoveRightPressed()
+{
+	KeyboardRightInput = 1.0f;
+}
+
+void AcharactersCharacter::HandleMoveRightReleased()
+{
+	if (KeyboardRightInput > 0.0f)
+	{
+		KeyboardRightInput = 0.0f;
+	}
+}
+
+void AcharactersCharacter::HandleMoveLeftPressed()
+{
+	KeyboardRightInput = -1.0f;
+}
+
+void AcharactersCharacter::HandleMoveLeftReleased()
+{
+	if (KeyboardRightInput < 0.0f)
+	{
+		KeyboardRightInput = 0.0f;
+	}
+}
+
+void AcharactersCharacter::HandleJumpPressedFallback()
+{
+	DoJumpStart();
+}
+
+void AcharactersCharacter::HandleJumpReleasedFallback()
+{
+	DoJumpEnd();
+}
+
+void AcharactersCharacter::ApplyKeyboardMovementFallback()
+{
+	if (!FMath::IsNearlyZero(KeyboardForwardInput) || !FMath::IsNearlyZero(KeyboardRightInput))
+	{
+		DoMove(KeyboardRightInput, KeyboardForwardInput);
 	}
 }

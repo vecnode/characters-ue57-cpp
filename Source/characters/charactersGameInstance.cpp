@@ -91,6 +91,18 @@ void UcharactersGameInstance::Shutdown()
 	Super::Shutdown();
 }
 
+FString UcharactersGameInstance::GetLocalHttpServerStatusText() const
+{
+	const TCHAR* EnabledText = bEnableLocalHttpServer ? TEXT("enabled") : TEXT("disabled");
+	const TCHAR* BoundText = LocalHttpRouter.IsValid() ? TEXT("bound") : TEXT("not-bound");
+
+	return FString::Printf(
+		TEXT("HTTP %s, port=%d, router=%s, endpoints=/health,/echo"),
+		EnabledText,
+		LocalHttpServerPort,
+		BoundText);
+}
+
 void UcharactersGameInstance::StartLocalHttpServer()
 {
 	if (!bEnableLocalHttpServer)

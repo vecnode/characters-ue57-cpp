@@ -14,6 +14,7 @@
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
 #include "InputCoreTypes.h"
+#include "Kismet/KismetSystemLibrary.h"
 #include "Widgets/Input/SVirtualJoystick.h"
 
 namespace
@@ -207,6 +208,41 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 	if (!ControlledPawn)
 	{
 		return;
+	}
+
+	if (bEnableKeyboardFallbackMovement)
+	{
+		const float ForwardRaw =
+			(IsInputKeyDown(EKeys::W) || IsInputKeyDown(EKeys::Up) ? 1.0f : 0.0f) -
+			(IsInputKeyDown(EKeys::S) || IsInputKeyDown(EKeys::Down) ? 1.0f : 0.0f);
+
+		const float RightRaw =
+			(IsInputKeyDown(EKeys::D) || IsInputKeyDown(EKeys::Right) ? 1.0f : 0.0f) -
+			(IsInputKeyDown(EKeys::A) || IsInputKeyDown(EKeys::Left) ? 1.0f : 0.0f);
+
+		if (!FMath::IsNearlyZero(ForwardRaw) || !FMath::IsNearlyZero(RightRaw))
+		{
+			const FRotator CurrentControlRotation = GetControlRotation();
+			const FRotator YawRotation(0.0f, CurrentControlRotation.Yaw, 0.0f);
+			const FVector ForwardDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::X);
+			const FVector RightDirection = FRotationMatrix(YawRotation).GetUnitAxis(EAxis::Y);
+
+			ControlledPawn->AddMovementInput(ForwardDirection, ForwardRaw);
+			ControlledPawn->AddMovementInput(RightDirection, RightRaw);
+		}
+	}
+
+	if (bEnableMouseFallbackLook)
+	{
+		float MouseDeltaX = 0.0f;
+		float MouseDeltaY = 0.0f;
+		GetInputMouseDelta(MouseDeltaX, MouseDeltaY);
+
+		if (!FMath::IsNearlyZero(MouseDeltaX) || !FMath::IsNearlyZero(MouseDeltaY))
+		{
+			AddYawInput(MouseDeltaX * MouseFallbackSensitivity);
+			AddPitchInput(-MouseDeltaY * MouseFallbackSensitivity);
+		}
 	}
 
 	if (!bLoggedMovementAnimDiagnostics)
@@ -425,6 +461,15 @@ void AcharactersPlayerController::BeginPlay()
 {
 	Super::BeginPlay();
 
+	if (IsLocalPlayerController() && !ShouldUseTouchControls())
+	{
+		FInputModeGameOnly InputMode;
+		SetInputMode(InputMode);
+		bShowMouseCursor = false;
+		SetIgnoreLookInput(false);
+		SetIgnoreMoveInput(false);
+	}
+
 	// only spawn touch controls on local player controllers
 	if (ShouldUseTouchControls() && IsLocalPlayerController())
 	{
@@ -449,9 +494,16 @@ void AcharactersPlayerController::SetupInputComponent()
 {
 	Super::SetupInputComponent();
 
+	if (InputComponent)
+	{
+		InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AcharactersPlayerController::HandleEscapePressed);
+	}
+
 	// only add IMCs for local player controllers
 	if (IsLocalPlayerController())
 	{
+		bAddedAnyMappingContext = false;
+
 		// Add Input Mapping Contexts
 		if (UEnhancedInputLocalPlayerSubsystem* Subsystem = ULocalPlayer::GetSubsystem<UEnhancedInputLocalPlayerSubsystem>(GetLocalPlayer()))
 		{
@@ -484,6 +536,7 @@ void AcharactersPlayerController::SetupInputComponent()
 				if (CurrentContext)
 				{
 					Subsystem->AddMappingContext(CurrentContext, 0);
+					bAddedAnyMappingContext = true;
 				}
 			}
 
@@ -495,11 +548,33 @@ void AcharactersPlayerController::SetupInputComponent()
 					if (CurrentContext)
 					{
 						Subsystem->AddMappingContext(CurrentContext, 0);
+						bAddedAnyMappingContext = true;
 					}
 				}
 			}
+
+			if (!bAddedAnyMappingContext)
+			{
+				UE_LOG(Logcharacters, Warning,
+					TEXT("AcharactersPlayerController: No input mapping contexts were added. Raw keyboard/mouse fallback remains active."));
+			}
+		}
+		else
+		{
+			UE_LOG(Logcharacters, Warning,
+				TEXT("AcharactersPlayerController: EnhancedInputLocalPlayerSubsystem unavailable. Raw keyboard/mouse fallback remains active."));
 		}
 	}
+}
+
+void AcharactersPlayerController::HandleEscapePressed()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
 }
 
 bool AcharactersPlayerController::ShouldUseTouchControls() const

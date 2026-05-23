@@ -59,6 +59,9 @@ public:
 	virtual void Init() override;
 	virtual void Shutdown() override;
 
+	UFUNCTION(BlueprintCallable, Category="Networking|HTTP Server")
+	FString GetLocalHttpServerStatusText() const;
+
 	UPROPERTY(Config, EditAnywhere, Category="Networking|HTTP Server")
 	bool bEnableLocalHttpServer = true;
 
