@@ -12,6 +12,19 @@
 
 namespace
 {
+	const TCHAR* GetBuildConfigurationLabel()
+	{
+#if UE_BUILD_SHIPPING
+		return TEXT("Shipping");
+#elif UE_BUILD_DEVELOPMENT
+		return TEXT("Development");
+#elif UE_BUILD_DEBUG
+		return TEXT("Debug");
+#else
+		return TEXT("Other");
+#endif
+	}
+
 	FString EscapeJson(const FString& InText)
 	{
 		FString Out = InText;
@@ -62,6 +75,13 @@ UcharactersGameInstance* UcharactersGameInstance::Get(const UObject* WorldContex
 void UcharactersGameInstance::Init()
 {
 	Super::Init();
+
+	UE_LOG(Logcharacters, Log,
+		TEXT("Startup: Build=%s HTTPServerEnabled=%s Port=%d"),
+		GetBuildConfigurationLabel(),
+		bEnableLocalHttpServer ? TEXT("true") : TEXT("false"),
+		LocalHttpServerPort);
+
 	StartLocalHttpServer();
 }
 

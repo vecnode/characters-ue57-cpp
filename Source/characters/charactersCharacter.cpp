@@ -182,19 +182,14 @@ void AcharactersCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		UE_LOG(Logcharacters, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
 	}
 
+	// Bind debug key as an input event so it works even when actor tick is disabled.
+	PlayerInputComponent->BindKey(EKeys::H, IE_Pressed, this, &AcharactersCharacter::PrintHelloWorld);
+
 }
 
 void AcharactersCharacter::Tick(float DeltaSeconds)
 {
 	Super::Tick(DeltaSeconds);
-
-	if (APlayerController* PC = Cast<APlayerController>(GetController()))
-	{
-		if (PC->WasInputKeyJustPressed(EKeys::H))
-		{
-			PrintHelloWorld();
-		}
-	}
 }
 
 void AcharactersCharacter::Move(const FInputActionValue& Value)
