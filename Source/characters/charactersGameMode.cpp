@@ -158,6 +158,56 @@ void AcharactersGameMode::HandleStartingNewPlayer_Implementation(APlayerControll
 	RestartPlayer(NewPlayer);
 }
 
+APawn* AcharactersGameMode::FindCachedBridgePawn(AController* Controller)
+{
+	if (!Controller)
+	{
+		return nullptr;
+	}
+
+	TWeakObjectPtr<APawn>* FoundPawnPtr = CachedBridgePawns.Find(Controller);
+	if (!FoundPawnPtr)
+	{
+		return nullptr;
+	}
+
+	APawn* CachedPawn = FoundPawnPtr->Get();
+	if (!IsValid(CachedPawn) || CachedPawn->GetWorld() != GetWorld())
+	{
+		CachedBridgePawns.Remove(Controller);
+		return nullptr;
+	}
+
+	return CachedPawn;
+}
+
+void AcharactersGameMode::CacheBridgePawn(AController* Controller, APawn* Pawn)
+{
+	if (!Controller || !Pawn)
+	{
+		return;
+	}
+
+	CachedBridgePawns.FindOrAdd(Controller) = Pawn;
+	Pawn->OnDestroyed.AddUniqueDynamic(this, &AcharactersGameMode::HandleCachedBridgeDestroyed);
+}
+
+void AcharactersGameMode::HandleCachedBridgeDestroyed(AActor* DestroyedActor)
+{
+	for (auto It = CachedBridgePawns.CreateIterator(); It; ++It)
+	{
+		const bool bInvalidController = !It.Key().IsValid();
+		const APawn* CachedPawn = It.Value().Get();
+		const bool bInvalidPawn = (CachedPawn == nullptr);
+		const bool bDestroyedMatch = (CachedPawn == DestroyedActor);
+
+		if (bInvalidController || bInvalidPawn || bDestroyedMatch)
+		{
+			It.RemoveCurrent();
+		}
+	}
+}
+
 void AcharactersGameMode::RestartPlayer(AController* NewPlayer)
 {
 	if (!NewPlayer)
@@ -253,6 +303,16 @@ void AcharactersGameMode::RestartPlayer(AController* NewPlayer)
 
 	if (PreferredNamedNonPawnActor && bSpawnFromPreferredNamedActorIfNotPawn)
 	{
+		if (APawn* CachedBridgePawn = FindCachedBridgePawn(NewPlayer))
+		{
+			NewPlayer->Possess(CachedBridgePawn);
+			UE_LOG(Logcharacters, Log,
+				TEXT("charactersGameMode: Reused cached bridge pawn '%s' for controller '%s'."),
+				*CachedBridgePawn->GetName(),
+				*GetNameSafe(NewPlayer));
+			return;
+		}
+
 		UClass* SpawnClass = DefaultPawnClass;
 		if (!SpawnClass || !SpawnClass->IsChildOf(APawn::StaticClass()))
 		{
@@ -262,6 +322,18 @@ void AcharactersGameMode::RestartPlayer(AController* NewPlayer)
 		}
 		else
 		{
+			TWeakObjectPtr<APawn> PreviousBridgePtr;
+			if (TWeakObjectPtr<APawn>* ExistingBridgePtr = CachedBridgePawns.Find(NewPlayer))
+			{
+				PreviousBridgePtr = *ExistingBridgePtr;
+				CachedBridgePawns.Remove(NewPlayer);
+			}
+
+			if (APawn* PreviousBridgePawn = PreviousBridgePtr.Get())
+			{
+				PreviousBridgePawn->Destroy();
+			}
+
 			FActorSpawnParameters SpawnParams;
 			SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AdjustIfPossibleButAlwaysSpawn;
 			SpawnParams.Owner = NewPlayer;
@@ -272,6 +344,7 @@ void AcharactersGameMode::RestartPlayer(AController* NewPlayer)
 				if (APawn* SpawnedPawn = World->SpawnActor<APawn>(SpawnClass, SpawnTransform, SpawnParams))
 				{
 					SetupProxyVisualsFromSourceActor(PreferredNamedNonPawnActor, SpawnedPawn);
+					CacheBridgePawn(NewPlayer, SpawnedPawn);
 
 					NewPlayer->Possess(SpawnedPawn);
 					UE_LOG(Logcharacters, Warning,
@@ -312,6 +385,23 @@ void AcharactersGameMode::RestartPlayer(AController* NewPlayer)
 		TEXT("charactersGameMode: No placed pawn found (Name='%s', Tag='%s'). Spawn fallback is disabled; no pawn will be spawned."),
 		*PreferredPlacedPawnName,
 		*PreferredPlacedPawnTag.ToString());
+}
+
+void AcharactersGameMode::Logout(AController* Exiting)
+{
+	if (Exiting)
+	{
+		if (TWeakObjectPtr<APawn>* BridgePawnPtr = CachedBridgePawns.Find(Exiting))
+		{
+			if (APawn* BridgePawn = BridgePawnPtr->Get())
+			{
+				BridgePawn->Destroy();
+			}
+			CachedBridgePawns.Remove(Exiting);
+		}
+	}
+
+	Super::Logout(Exiting);
 }
 
 void AcharactersGameMode::BeginPlay()

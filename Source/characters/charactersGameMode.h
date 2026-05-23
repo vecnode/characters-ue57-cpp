@@ -24,6 +24,7 @@ protected:
 
 	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 	virtual void RestartPlayer(AController* NewPlayer) override;
+	virtual void Logout(AController* Exiting) override;
 	virtual void BeginPlay() override;
 
 	/** Optional class filter for placed pawns to possess first. */
@@ -48,6 +49,21 @@ protected:
 	 */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
 	bool bSpawnFromPreferredNamedActorIfNotPawn = true;
+
+private:
+
+	/** Runtime bridge pawn cache keyed by controller to avoid duplicate spawns across restarts. */
+	TMap<TWeakObjectPtr<AController>, TWeakObjectPtr<APawn>> CachedBridgePawns;
+
+	/** Removes invalid cache entries and returns a valid cached bridge pawn for this controller if one exists. */
+	APawn* FindCachedBridgePawn(AController* Controller);
+
+	/** Stores bridge pawn cache entry and binds destruction invalidation callback. */
+	void CacheBridgePawn(AController* Controller, APawn* Pawn);
+
+	/** Removes cache entries that point at a destroyed pawn and prunes stale keys/values. */
+	UFUNCTION()
+	void HandleCachedBridgeDestroyed(AActor* DestroyedActor);
 };
 
 
