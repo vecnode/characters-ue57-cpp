@@ -4,6 +4,7 @@
 
 #include "CoreMinimal.h"
 #include "GameFramework/PlayerController.h"
+#include "UObject/SoftObjectPtr.h"
 #include "charactersPlayerController.generated.h"
 
 class UInputMappingContext;
@@ -27,6 +28,14 @@ protected:
 	/** Input Mapping Contexts */
 	UPROPERTY(EditAnywhere, Category="Input|Input Mappings")
 	TArray<UInputMappingContext*> MobileExcludedMappingContexts;
+
+	/** Optional soft reference fallback for default input mapping context. */
+	UPROPERTY(EditDefaultsOnly, Category="Input|Input Mappings")
+	TSoftObjectPtr<UInputMappingContext> DefaultMappingContextAsset;
+
+	/** Optional soft reference fallback for mouse-look mapping context. */
+	UPROPERTY(EditDefaultsOnly, Category="Input|Input Mappings")
+	TSoftObjectPtr<UInputMappingContext> MouseLookMappingContextAsset;
 
 	/** Mobile controls widget to spawn */
 	UPROPERTY(EditAnywhere, Category="Input|Touch Controls")

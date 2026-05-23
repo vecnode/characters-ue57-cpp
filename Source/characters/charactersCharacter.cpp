@@ -17,9 +17,46 @@
 
 namespace
 {
-	UInputAction* LoadInputActionFallback(const TCHAR* AssetPath)
+	UInputAction* ResolveInputActionWithFallback(
+		UInputAction* ExistingAction,
+		const TSoftObjectPtr<UInputAction>& SoftReference,
+		const TCHAR* LegacyPath,
+		const TCHAR* ActionLabel,
+		const UObject* Owner)
 	{
-		return Cast<UInputAction>(StaticLoadObject(UInputAction::StaticClass(), nullptr, AssetPath));
+		if (ExistingAction)
+		{
+			return ExistingAction;
+		}
+
+		if (!SoftReference.IsNull())
+		{
+			if (UInputAction* LoadedFromSoftRef = SoftReference.LoadSynchronous())
+			{
+				return LoadedFromSoftRef;
+			}
+
+			UE_LOG(Logcharacters, Warning,
+				TEXT("'%s' failed to load soft input action '%s' for %s."),
+				*GetNameSafe(Owner),
+				*SoftReference.ToString(),
+				ActionLabel);
+		}
+
+		if (LegacyPath)
+		{
+			if (UInputAction* LoadedFromLegacyPath = Cast<UInputAction>(StaticLoadObject(UInputAction::StaticClass(), nullptr, LegacyPath)))
+			{
+				return LoadedFromLegacyPath;
+			}
+		}
+
+		UE_LOG(Logcharacters, Warning,
+			TEXT("'%s' has no valid input action for %s. Configure asset references in Blueprint/Class Defaults."),
+			*GetNameSafe(Owner),
+			ActionLabel);
+
+		return nullptr;
 	}
 }
 
@@ -67,22 +104,42 @@ void AcharactersCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 
 	if (!JumpAction)
 	{
-		JumpAction = LoadInputActionFallback(TEXT("/Game/Input/Actions/IA_Jump.IA_Jump"));
+		JumpAction = ResolveInputActionWithFallback(
+			JumpAction,
+			JumpActionAsset,
+			TEXT("/Game/Input/Actions/IA_Jump.IA_Jump"),
+			TEXT("JumpAction"),
+			this);
 	}
 
 	if (!MoveAction)
 	{
-		MoveAction = LoadInputActionFallback(TEXT("/Game/Input/Actions/IA_Move.IA_Move"));
+		MoveAction = ResolveInputActionWithFallback(
+			MoveAction,
+			MoveActionAsset,
+			TEXT("/Game/Input/Actions/IA_Move.IA_Move"),
+			TEXT("MoveAction"),
+			this);
 	}
 
 	if (!LookAction)
 	{
-		LookAction = LoadInputActionFallback(TEXT("/Game/Input/Actions/IA_Look.IA_Look"));
+		LookAction = ResolveInputActionWithFallback(
+			LookAction,
+			LookActionAsset,
+			TEXT("/Game/Input/Actions/IA_Look.IA_Look"),
+			TEXT("LookAction"),
+			this);
 	}
 
 	if (!MouseLookAction)
 	{
-		MouseLookAction = LoadInputActionFallback(TEXT("/Game/Input/Actions/IA_MouseLook.IA_MouseLook"));
+		MouseLookAction = ResolveInputActionWithFallback(
+			MouseLookAction,
+			MouseLookActionAsset,
+			TEXT("/Game/Input/Actions/IA_MouseLook.IA_MouseLook"),
+			TEXT("MouseLookAction"),
+			this);
 	}
 
 	// Set up action bindings

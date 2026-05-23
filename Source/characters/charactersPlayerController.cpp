@@ -14,9 +14,40 @@
 
 namespace
 {
-	UInputMappingContext* LoadMappingContextFallback(const TCHAR* AssetPath)
+	UInputMappingContext* ResolveMappingContextWithFallback(
+		const TSoftObjectPtr<UInputMappingContext>& SoftReference,
+		const TCHAR* LegacyPath,
+		const TCHAR* ContextLabel,
+		const UObject* Owner)
 	{
-		return Cast<UInputMappingContext>(StaticLoadObject(UInputMappingContext::StaticClass(), nullptr, AssetPath));
+		if (!SoftReference.IsNull())
+		{
+			if (UInputMappingContext* LoadedFromSoftRef = SoftReference.LoadSynchronous())
+			{
+				return LoadedFromSoftRef;
+			}
+
+			UE_LOG(Logcharacters, Warning,
+				TEXT("'%s' failed to load soft mapping context '%s' for %s."),
+				*GetNameSafe(Owner),
+				*SoftReference.ToString(),
+				ContextLabel);
+		}
+
+		if (LegacyPath)
+		{
+			if (UInputMappingContext* LoadedFromLegacyPath = Cast<UInputMappingContext>(StaticLoadObject(UInputMappingContext::StaticClass(), nullptr, LegacyPath)))
+			{
+				return LoadedFromLegacyPath;
+			}
+		}
+
+		UE_LOG(Logcharacters, Warning,
+			TEXT("'%s' has no valid mapping context for %s. Configure asset references in Blueprint/Class Defaults."),
+			*GetNameSafe(Owner),
+			ContextLabel);
+
+		return nullptr;
 	}
 }
 
@@ -152,7 +183,11 @@ void AcharactersPlayerController::SetupInputComponent()
 		{
 			if (DefaultMappingContexts.Num() == 0)
 			{
-				if (UInputMappingContext* DefaultContext = LoadMappingContextFallback(TEXT("/Game/Input/IMC_Default.IMC_Default")))
+				if (UInputMappingContext* DefaultContext = ResolveMappingContextWithFallback(
+					DefaultMappingContextAsset,
+					TEXT("/Game/Input/IMC_Default.IMC_Default"),
+					TEXT("DefaultMappingContext"),
+					this))
 				{
 					DefaultMappingContexts.Add(DefaultContext);
 				}
@@ -160,7 +195,11 @@ void AcharactersPlayerController::SetupInputComponent()
 
 			if (MobileExcludedMappingContexts.Num() == 0)
 			{
-				if (UInputMappingContext* MouseContext = LoadMappingContextFallback(TEXT("/Game/Input/IMC_MouseLook.IMC_MouseLook")))
+				if (UInputMappingContext* MouseContext = ResolveMappingContextWithFallback(
+					MouseLookMappingContextAsset,
+					TEXT("/Game/Input/IMC_MouseLook.IMC_MouseLook"),
+					TEXT("MouseLookMappingContext"),
+					this))
 				{
 					MobileExcludedMappingContexts.Add(MouseContext);
 				}

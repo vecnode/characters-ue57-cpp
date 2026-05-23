@@ -5,6 +5,7 @@
 #include "CoreMinimal.h"
 #include "GameFramework/Character.h"
 #include "Logging/LogMacros.h"
+#include "UObject/SoftObjectPtr.h"
 #include "charactersCharacter.generated.h"
 
 class USpringArmComponent;
@@ -48,6 +49,22 @@ protected:
 	/** Mouse Look Input Action */
 	UPROPERTY(EditAnywhere, Category="Input")
 	UInputAction* MouseLookAction;
+
+	/** Optional soft reference fallback for jump input action asset. */
+	UPROPERTY(EditDefaultsOnly, Category="Input|Defaults")
+	TSoftObjectPtr<UInputAction> JumpActionAsset;
+
+	/** Optional soft reference fallback for move input action asset. */
+	UPROPERTY(EditDefaultsOnly, Category="Input|Defaults")
+	TSoftObjectPtr<UInputAction> MoveActionAsset;
+
+	/** Optional soft reference fallback for look input action asset. */
+	UPROPERTY(EditDefaultsOnly, Category="Input|Defaults")
+	TSoftObjectPtr<UInputAction> LookActionAsset;
+
+	/** Optional soft reference fallback for mouse look input action asset. */
+	UPROPERTY(EditDefaultsOnly, Category="Input|Defaults")
+	TSoftObjectPtr<UInputAction> MouseLookActionAsset;
 
 public:
 
