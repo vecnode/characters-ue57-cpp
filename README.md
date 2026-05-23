@@ -19,10 +19,15 @@ Ongoing. AI not implemented yet. On VSCode press Ctrl + F5
 3. If no placed pawn is found and spawn fallback is enabled, normal pawn spawn is used.
 4. `charactersPlayerController` is the single camera authority (view target setup + third-person camera state).
 5. Mouse wheel zoom updates spring-arm distance with clamp and interpolation, without double-applying when both key and axis wheel events fire.
+6. Possession guards MetaHuman skeletal meshes against collision drag and keeps follower meshes synced with the body via `LeaderPose`.
+7. Runtime diagnostics log movement, mesh animation wiring, and grounding offsets for fast PIE debugging.
 
 ## Features
 - Uses Character movement, possession, camera, and input systems safely.
 - Uses direct Pawn/Character possession architecture.
+- Auto-syncs MetaHuman outfit meshes to the body mesh at runtime.
+- Includes runtime movement/grounding diagnostics for locomotion and mesh-offset issues.
+
 
 ## Run
 - Build: `charactersEditor Win64 Development`.
