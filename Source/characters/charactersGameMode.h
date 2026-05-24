@@ -45,7 +45,11 @@ protected:
 
 	/** If true, spawn a large NavMeshBoundsVolume automatically at runtime. */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Navigation")
-	bool bAutoCreateNavMeshBounds = true;
+	bool bAutoCreateNavMeshBounds = false;
+
+	/** Preferred NavMeshBoundsVolume actor name/label to use and rebuild (for example: MAIN_NAV_MESH). */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Navigation")
+	FString PreferredNavMeshBoundsName = TEXT("MAIN_NAV_MESH");
 
 	/** Half-extent in X/Y for the auto-created nav bounds volume (in Unreal units). */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Navigation", meta = (ClampMin = "1000.0"))

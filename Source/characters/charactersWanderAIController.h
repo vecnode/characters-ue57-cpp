@@ -30,7 +30,7 @@ private:
 	void StartRuntimeBehaviorTree();
 
 	UPROPERTY(EditAnywhere, Category = "AI|Patrol", meta=(ClampMin="100.0"))
-	float PatrolRadius = 1200.0f;
+	float PatrolRadius = 50000.0f;
 
 	UPROPERTY(EditAnywhere, Category = "AI|Patrol", meta=(ClampMin="0.1"))
 	float WaitMinSeconds = 2.0f;

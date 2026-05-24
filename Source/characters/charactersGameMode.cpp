@@ -185,24 +185,75 @@ void AcharactersGameMode::BeginPlay()
 
 void AcharactersGameMode::EnsureAutoNavMeshBounds()
 {
-	if (!bAutoCreateNavMeshBounds)
-	{
-		return;
-	}
-
 	UWorld* World = GetWorld();
 	if (!World)
 	{
 		return;
 	}
 
+	ANavMeshBoundsVolume* PreferredVolume = nullptr;
+	ANavMeshBoundsVolume* FirstVolume = nullptr;
+
 	for (TActorIterator<ANavMeshBoundsVolume> It(World); It; ++It)
 	{
-		if (IsValid(*It))
+		ANavMeshBoundsVolume* Candidate = *It;
+		if (!IsValid(Candidate))
 		{
-			UE_LOG(Logcharacters, Log, TEXT("charactersGameMode: Existing NavMeshBoundsVolume found. Auto-create skipped."));
-			return;
+			continue;
 		}
+
+		if (!FirstVolume)
+		{
+			FirstVolume = Candidate;
+		}
+
+		if (!PreferredNavMeshBoundsName.IsEmpty())
+		{
+			const bool bNameMatch = Candidate->GetName().Equals(PreferredNavMeshBoundsName, ESearchCase::IgnoreCase)
+				|| Candidate->GetFName().ToString().Equals(PreferredNavMeshBoundsName, ESearchCase::IgnoreCase);
+
+			bool bLabelMatch = false;
+#if WITH_EDITOR
+			bLabelMatch = Candidate->GetActorLabel().Equals(PreferredNavMeshBoundsName, ESearchCase::IgnoreCase);
+#endif
+
+			if (bNameMatch || bLabelMatch)
+			{
+				PreferredVolume = Candidate;
+				break;
+			}
+		}
+	}
+
+	ANavMeshBoundsVolume* SelectedVolume = PreferredVolume ? PreferredVolume : FirstVolume;
+	if (SelectedVolume)
+	{
+		if (UNavigationSystemV1* NavigationSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+		{
+			NavigationSystem->OnNavigationBoundsUpdated(SelectedVolume);
+			NavigationSystem->Build();
+
+			UE_LOG(Logcharacters, Log,
+				TEXT("charactersGameMode: Using NavMeshBoundsVolume '%s' for navigation build.%s"),
+				*GetNameSafe(SelectedVolume),
+				PreferredVolume ? TEXT("") : TEXT(" (Preferred name not found, using first available volume.)"));
+		}
+		else
+		{
+			UE_LOG(Logcharacters, Error,
+				TEXT("charactersGameMode: NavigationSystemV1 unavailable while using existing NavMeshBoundsVolume '%s'."),
+				*GetNameSafe(SelectedVolume));
+		}
+
+		return;
+	}
+
+	if (!bAutoCreateNavMeshBounds)
+	{
+		UE_LOG(Logcharacters, Warning,
+			TEXT("charactersGameMode: No NavMeshBoundsVolume found (preferred='%s') and auto-create is disabled."),
+			*PreferredNavMeshBoundsName);
+		return;
 	}
 
 	FVector SpawnLocation = FVector::ZeroVector;
