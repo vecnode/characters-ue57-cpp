@@ -661,12 +661,6 @@ void AcharactersPlayerController::EnableAutopilotForCurrentPawn()
 	{
 		charactersHUD->AddTransientMessage(TEXT("AI Control: ON (press J to return)"), FColor::Cyan, 2.5f);
 	}
-#if !UE_BUILD_SHIPPING
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Cyan, TEXT("AI Control ON (J to disable)"));
-	}
-#endif
 }
 
 void AcharactersPlayerController::DisableAutopilotAndRepossess()
@@ -704,12 +698,6 @@ void AcharactersPlayerController::DisableAutopilotAndRepossess()
 	{
 		charactersHUD->AddTransientMessage(TEXT("AI Control: OFF (player control restored)"), FColor::Green, 2.5f);
 	}
-#if !UE_BUILD_SHIPPING
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green, TEXT("AI Control OFF"));
-	}
-#endif
 }
 
 bool AcharactersPlayerController::ShouldUseTouchControls() const

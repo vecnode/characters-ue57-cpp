@@ -1,35 +1,55 @@
 # characters-ue57-cpp
 
-UE 5.7 C++ project for direct player possession of a placed MetaHuman Pawn/Character.
+UE 5.7 C++ project.
+Direct possession of a placed MetaHuman Pawn/Character.
 
-Ongoing. AI not implemented yet. On VSCode press Ctrl + F5
+Status: ongoing.
+AI not implemented yet.
+
+## Core Idea
+- Keep one placed actor named `MAIN_CHARACTER`.
+- Possess that actor directly at runtime.
+- Avoid default spawn flow unless fallback is enabled.
+
+## Important Classes
+- `charactersGameMode`
+	- `RestartPlayer` searches for `MAIN_CHARACTER` first.
+	- Falls back to normal spawn only when configured.
+- `charactersPlayerController`
+	- Camera authority for view target and third-person camera state.
+	- Mouse wheel zoom with clamp + interpolation.
+	- Guards against wheel key/axis double-apply.
+- `AcharactersMHPlayer` (recommended BP parent)
+	- Stable direct possession target.
+	- MetaHuman mesh sync via `LeaderPose`.
 
 ## Required Level Setup
-- Place 1 Pawn/Character in the level named `MAIN_CHARACTER`.
-- Recommended: use a Blueprint derived from `AcharactersMHPlayer` so possession is direct and production-safe.
-- Use `charactersGameMode` and `charactersPlayerController` as active gameplay classes.
+- Place 1 Pawn/Character named `MAIN_CHARACTER`.
+- Prefer a Blueprint derived from `AcharactersMHPlayer`.
+- Set gameplay classes to:
+	- `charactersGameMode`
+	- `charactersPlayerController`
 
-## Setup Notes
-- Reparent your character Blueprint to a Pawn/Character class (`AcharactersMHPlayer` recommended).
-- Keep the placed actor name `MAIN_CHARACTER` (or use the configured tag/class filters).
-
-## What the C++ Layer Does
-1. `charactersGameMode::RestartPlayer` looks for `MAIN_CHARACTER` first.
-2. Direct pawn possession is used for placed Pawn/Character actors.
-3. If no placed pawn is found and spawn fallback is enabled, normal pawn spawn is used.
-4. `charactersPlayerController` is the single camera authority (view target setup + third-person camera state).
-5. Mouse wheel zoom updates spring-arm distance with clamp and interpolation, without double-applying when both key and axis wheel events fire.
-6. Possession guards MetaHuman skeletal meshes against collision drag and keeps follower meshes synced with the body via `LeaderPose`.
-7. Runtime diagnostics log movement, mesh animation wiring, and grounding offsets for fast PIE debugging.
-
-## Features
-- Uses Character movement, possession, camera, and input systems safely.
-- Uses direct Pawn/Character possession architecture.
-- Auto-syncs MetaHuman outfit meshes to the body mesh at runtime.
-- Includes runtime movement/grounding diagnostics for locomotion and mesh-offset issues.
-
+## Most Important Folders
+- `Source/`
+	- Main C++ gameplay code and targets.
+- `Config/`
+	- Project runtime and editor settings.
+- `Content/`
+	- Maps, Blueprints, MetaHumans, assets.
+- `Binaries/`, `Builds/`
+	- Build outputs and packaged artifacts.
+- `Saved/`, `Intermediate/`, `DerivedDataCache/`
+	- Generated/cache/debug data.
 
 ## Run
-- Build: `charactersEditor Win64 Development`.
-- Start PIE and verify one `MAIN_CHARACTER` exists in the active level.
+- In VS Code: press `Ctrl + F5`.
+- Build task: `charactersEditor Win64 Development`.
+- Start PIE and confirm one `MAIN_CHARACTER` exists.
+
+## Diagnostics
+- Runtime logs include:
+	- movement state,
+	- mesh animation wiring,
+	- grounding/offset checks.
 

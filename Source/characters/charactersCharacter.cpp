@@ -303,13 +303,6 @@ void AcharactersCharacter::PrintHelloWorld()
 		}
 	}
 
-#if !UE_BUILD_SHIPPING
-	if (GEngine)
-	{
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Green, TEXT("Hello World!"));
-		GEngine->AddOnScreenDebugMessage(-1, 2.0f, FColor::Yellow, PositionText);
-	}
-#endif
 }
 
 void AcharactersCharacter::HandleMoveForwardPressed()
