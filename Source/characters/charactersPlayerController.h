@@ -7,6 +7,7 @@
 #include "UObject/SoftObjectPtr.h"
 #include "charactersPlayerController.generated.h"
 
+class AAIController;
 class UInputMappingContext;
 class UUserWidget;
 
@@ -64,6 +65,15 @@ protected:
 	/** Requests application quit when Escape is pressed. */
 	void HandleEscapePressed();
 
+	/** Toggles player possession between manual control and runtime AI autopilot. */
+	void HandleToggleAutopilotPressed();
+
+	/** Enables AI autopilot over the currently possessed pawn. */
+	void EnableAutopilotForCurrentPawn();
+
+	/** Disables AI autopilot and repossesses the last autopilot pawn. */
+	void DisableAutopilotAndRepossess();
+
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
 
@@ -118,5 +128,25 @@ protected:
 
 	/** Sample count collected in the telemetry window. */
 	int32 MovementProbeSampleCount = 0;
+
+	/** True after one-time raw key bindings (Escape/J) are installed. */
+	bool bUtilityKeysBound = false;
+
+	/** True while the pawn is currently controlled by runtime autopilot AI. */
+	bool bAutopilotEnabled = false;
+
+	/** World time (seconds) of the last processed autopilot toggle. */
+	float LastAutopilotToggleTimeSeconds = -1000.0f;
+
+	/** Small debounce window to avoid duplicate toggle calls from repeated key binds. */
+	UPROPERTY(EditAnywhere, Category = "AI|Autopilot", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float AutopilotToggleDebounceSeconds = 0.2f;
+
+	/** Last pawn handed over to autopilot. */
+	TWeakObjectPtr<APawn> AutopilotPawn;
+
+	/** Configurable controller class used for autopilot possession. */
+	UPROPERTY(EditAnywhere, Category = "AI|Autopilot")
+	TSubclassOf<AAIController> AutopilotAIControllerClass;
 
 };

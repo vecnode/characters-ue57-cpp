@@ -25,6 +25,7 @@ protected:
 	virtual void HandleStartingNewPlayer_Implementation(APlayerController* NewPlayer) override;
 	virtual void RestartPlayer(AController* NewPlayer) override;
 	virtual void BeginPlay() override;
+	void EnsureAutoNavMeshBounds();
 
 	/** Optional class filter for placed pawns to possess first. */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
@@ -41,6 +42,18 @@ protected:
 	/** If false, no pawn is spawned when a placed pawn cannot be found. */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
 	bool bAllowSpawnFallback = false;
+
+	/** If true, spawn a large NavMeshBoundsVolume automatically at runtime. */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Navigation")
+	bool bAutoCreateNavMeshBounds = true;
+
+	/** Half-extent in X/Y for the auto-created nav bounds volume (in Unreal units). */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Navigation", meta = (ClampMin = "1000.0"))
+	float AutoNavMeshExtentXY = 500000.0f;
+
+	/** Half-extent in Z for the auto-created nav bounds volume (in Unreal units). */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Navigation", meta = (ClampMin = "500.0"))
+	float AutoNavMeshExtentZ = 100000.0f;
 };
 
 

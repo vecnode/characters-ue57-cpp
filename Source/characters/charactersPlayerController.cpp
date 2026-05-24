@@ -2,14 +2,18 @@
 
 
 #include "charactersPlayerController.h"
+#include "AIController.h"
 #include "EnhancedInputSubsystems.h"
 #include "Engine/LocalPlayer.h"
 #include "InputMappingContext.h"
 #include "Blueprint/UserWidget.h"
 #include "characters.h"
+#include "charactersHUD.h"
+#include "charactersWanderAIController.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
+#include "Engine/Engine.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -496,7 +500,12 @@ void AcharactersPlayerController::SetupInputComponent()
 
 	if (InputComponent)
 	{
-		InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AcharactersPlayerController::HandleEscapePressed);
+		if (!bUtilityKeysBound)
+		{
+			InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AcharactersPlayerController::HandleEscapePressed);
+			InputComponent->BindKey(EKeys::J, IE_Pressed, this, &AcharactersPlayerController::HandleToggleAutopilotPressed);
+			bUtilityKeysBound = true;
+		}
 	}
 
 	// only add IMCs for local player controllers
@@ -575,6 +584,132 @@ void AcharactersPlayerController::HandleEscapePressed()
 	}
 
 	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+}
+
+void AcharactersPlayerController::HandleToggleAutopilotPressed()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	const UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	const float CurrentTimeSeconds = World->GetTimeSeconds();
+	if ((CurrentTimeSeconds - LastAutopilotToggleTimeSeconds) < AutopilotToggleDebounceSeconds)
+	{
+		return;
+	}
+
+	LastAutopilotToggleTimeSeconds = CurrentTimeSeconds;
+
+	if (bAutopilotEnabled)
+	{
+		DisableAutopilotAndRepossess();
+	}
+	else
+	{
+		EnableAutopilotForCurrentPawn();
+	}
+}
+
+void AcharactersPlayerController::EnableAutopilotForCurrentPawn()
+{
+	APawn* ControlledPawn = GetPawn();
+	if (!ControlledPawn)
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("Autopilot: no currently possessed pawn to hand to AI."));
+		return;
+	}
+
+	AutopilotPawn = ControlledPawn;
+
+	FActorSpawnParameters SpawnParams;
+	SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+
+	UClass* DesiredAIControllerClass = AutopilotAIControllerClass.Get();
+	if (!DesiredAIControllerClass)
+	{
+		DesiredAIControllerClass = AcharactersWanderAIController::StaticClass();
+	}
+
+	AAIController* AIController = GetWorld()->SpawnActor<AAIController>(
+		DesiredAIControllerClass,
+		ControlledPawn->GetActorLocation(),
+		ControlledPawn->GetActorRotation(),
+		SpawnParams);
+
+	if (!AIController)
+	{
+		UE_LOG(Logcharacters, Error, TEXT("Autopilot: failed to spawn AI controller '%s'."), *GetNameSafe(DesiredAIControllerClass));
+		return;
+	}
+
+	UnPossess();
+	AIController->Possess(ControlledPawn);
+	SetViewTargetWithBlend(ControlledPawn, 0.0f);
+
+	bAutopilotEnabled = true;
+
+	UE_LOG(Logcharacters, Log, TEXT("Autopilot: ENABLED for pawn '%s'. Press J again to return to player control."), *GetNameSafe(ControlledPawn));
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(TEXT("AI Control: ON (press J to return)"), FColor::Cyan, 2.5f);
+	}
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Cyan, TEXT("AI Control ON (J to disable)"));
+	}
+#endif
+}
+
+void AcharactersPlayerController::DisableAutopilotAndRepossess()
+{
+	APawn* PawnToRepossess = AutopilotPawn.Get();
+	if (!PawnToRepossess)
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("Autopilot: no cached pawn to repossess."));
+		bAutopilotEnabled = false;
+		return;
+	}
+
+	if (AController* CurrentController = PawnToRepossess->GetController())
+	{
+		if (CurrentController != this)
+		{
+			CurrentController->UnPossess();
+
+			if (CurrentController->IsA<AAIController>())
+			{
+				CurrentController->Destroy();
+			}
+		}
+	}
+
+	Possess(PawnToRepossess);
+	SetViewTargetWithBlend(PawnToRepossess, 0.0f);
+
+	bAutopilotEnabled = false;
+	AutopilotPawn.Reset();
+
+	UE_LOG(Logcharacters, Log, TEXT("Autopilot: DISABLED. Player control restored."));
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(TEXT("AI Control: OFF (player control restored)"), FColor::Green, 2.5f);
+	}
+#if !UE_BUILD_SHIPPING
+	if (GEngine)
+	{
+		GEngine->AddOnScreenDebugMessage(-1, 2.5f, FColor::Green, TEXT("AI Control OFF"));
+	}
+#endif
 }
 
 bool AcharactersPlayerController::ShouldUseTouchControls() const

@@ -10,6 +10,8 @@
 #include "GameFramework/PlayerController.h"
 #include "GameFramework/SpectatorPawn.h"
 #include "Engine/World.h"
+#include "NavigationSystem.h"
+#include "NavMesh/NavMeshBoundsVolume.h"
 
 namespace
 {
@@ -178,4 +180,72 @@ void AcharactersGameMode::RestartPlayer(AController* NewPlayer)
 void AcharactersGameMode::BeginPlay()
 {
 	Super::BeginPlay();
+	EnsureAutoNavMeshBounds();
+}
+
+void AcharactersGameMode::EnsureAutoNavMeshBounds()
+{
+	if (!bAutoCreateNavMeshBounds)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World)
+	{
+		return;
+	}
+
+	for (TActorIterator<ANavMeshBoundsVolume> It(World); It; ++It)
+	{
+		if (IsValid(*It))
+		{
+			UE_LOG(Logcharacters, Log, TEXT("charactersGameMode: Existing NavMeshBoundsVolume found. Auto-create skipped."));
+			return;
+		}
+	}
+
+	FVector SpawnLocation = FVector::ZeroVector;
+	if (APlayerController* PC = World->GetFirstPlayerController())
+	{
+		if (APawn* Pawn = PC->GetPawn())
+		{
+			SpawnLocation = Pawn->GetActorLocation();
+		}
+	}
+
+	ANavMeshBoundsVolume* NavBoundsVolume = World->SpawnActor<ANavMeshBoundsVolume>(
+		ANavMeshBoundsVolume::StaticClass(),
+		SpawnLocation,
+		FRotator::ZeroRotator);
+
+	if (!NavBoundsVolume)
+	{
+		UE_LOG(Logcharacters, Error, TEXT("charactersGameMode: Failed to spawn runtime NavMeshBoundsVolume."));
+		return;
+	}
+
+	constexpr float DefaultBrushHalfExtent = 100.0f;
+	const FVector SafeExtents(
+		FMath::Max(AutoNavMeshExtentXY, 1000.0f),
+		FMath::Max(AutoNavMeshExtentXY, 1000.0f),
+		FMath::Max(AutoNavMeshExtentZ, 500.0f));
+
+	NavBoundsVolume->SetActorScale3D(SafeExtents / DefaultBrushHalfExtent);
+
+	if (UNavigationSystemV1* NavigationSystem = FNavigationSystem::GetCurrent<UNavigationSystemV1>(World))
+	{
+		NavigationSystem->OnNavigationBoundsUpdated(NavBoundsVolume);
+		NavigationSystem->Build();
+		UE_LOG(Logcharacters, Log,
+			TEXT("charactersGameMode: Spawned runtime NavMeshBoundsVolume at %s with extents XY=%.0f Z=%.0f and triggered nav build."),
+			*SpawnLocation.ToCompactString(),
+			SafeExtents.X,
+			SafeExtents.Z);
+	}
+	else
+	{
+		UE_LOG(Logcharacters, Error,
+			TEXT("charactersGameMode: NavigationSystemV1 unavailable after spawning NavMeshBoundsVolume."));
+	}
 }
