@@ -166,6 +166,44 @@ void UcharactersGameInstance::SendEventToPlatform(const FString& EventName, cons
 			if (StatusCode >= 200 && StatusCode < 300)
 			{
 				UE_LOG(Logcharacters, Log, TEXT("Platform event '%s' acknowledged [%d]."), *EventName, StatusCode);
+
+				bool bAgentRunning = false;
+				FString AgentAction;
+				TSharedPtr<FJsonObject> ResponseJson;
+				const FString ResponseBody = Response->GetContentAsString();
+				const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(ResponseBody);
+				if (FJsonSerializer::Deserialize(Reader, ResponseJson) && ResponseJson.IsValid())
+				{
+					ResponseJson->TryGetBoolField(TEXT("agent_running"), bAgentRunning);
+					ResponseJson->TryGetStringField(TEXT("agent_action"), AgentAction);
+				}
+
+				FString HudMessage;
+				if (!AgentAction.IsEmpty())
+				{
+					HudMessage = FString::Printf(
+						TEXT("Agent %s (%s)"),
+						*AgentAction.ToUpper(),
+						bAgentRunning ? TEXT("RUNNING") : TEXT("STOPPED"));
+				}
+				else if (ResponseJson.IsValid())
+				{
+					HudMessage = FString::Printf(TEXT("Agent %s"), bAgentRunning ? TEXT("RUNNING") : TEXT("STOPPED"));
+				}
+
+				if (!HudMessage.IsEmpty())
+				{
+					if (UWorld* World = GetWorld())
+					{
+						if (APlayerController* PC = World->GetFirstPlayerController())
+						{
+							if (AcharactersHUD* HUD = Cast<AcharactersHUD>(PC->GetHUD()))
+							{
+								HUD->AddTransientMessage(HudMessage, bAgentRunning ? FColor::Green : FColor::Yellow, 2.0f);
+							}
+						}
+					}
+				}
 			}
 			else
 			{

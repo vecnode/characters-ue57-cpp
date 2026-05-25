@@ -595,17 +595,12 @@ void AcharactersPlayerController::HandleYPressed()
 		return;
 	}
 
-	UE_LOG(Logcharacters, Log, TEXT("hello world 2"));
+	UE_LOG(Logcharacters, Log, TEXT("Y pressed: requesting platform agent toggle."));
 
 	if (UcharactersGameInstance* GI = UcharactersGameInstance::Get(this))
 	{
 		const FString SourceLabel = GIsEditor ? TEXT("unreal-editor") : TEXT("unreal-standalone");
-		GI->SendEventToPlatform(TEXT("key_pressed"), TEXT("hello world 2"), SourceLabel);
-	}
-
-	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
-	{
-		charactersHUD->AddTransientMessage(TEXT("hello world 2"), FColor::Green, 2.0f);
+		GI->SendEventToPlatform(TEXT("key_pressed"), TEXT("toggle_agent"), SourceLabel);
 	}
 }
 
