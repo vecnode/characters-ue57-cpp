@@ -1,4 +1,5 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Based on Unreal Engine template code.
+// Project-specific implementation and modifications Copyright (c) vecnode, 2026.
 
 #include "charactersGameMode.h"
 #include "charactersHUD.h"

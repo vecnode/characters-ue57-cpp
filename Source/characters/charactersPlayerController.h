@@ -1,8 +1,10 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Based on Unreal Engine template code.
+// Project-specific implementation and modifications Copyright (c) vecnode, 2026.
 
 #pragma once
 
 #include "CoreMinimal.h"
+#include "Camera/CameraActor.h"
 #include "GameFramework/PlayerController.h"
 #include "UObject/SoftObjectPtr.h"
 #include "charactersPlayerController.generated.h"
@@ -12,8 +14,8 @@ class UInputMappingContext;
 class UUserWidget;
 
 /**
- *  Basic PlayerController class for a third person game
- *  Manages input mappings
+ * Runtime player controller that owns input setup, camera zoom behavior,
+ * possession diagnostics, and optional AI autopilot handoff.
  */
 UCLASS()
 class AcharactersPlayerController : public APlayerController
@@ -56,7 +58,7 @@ protected:
 	/** Called when this controller possesses a new pawn. Sets up third-person camera. */
 	virtual void OnPossess(APawn* InPawn) override;
 
-	/** Per-frame camera distance update (mouse wheel zoom). */
+	/** Per-frame input fallback, diagnostics, and camera zoom updates. */
 	virtual void PlayerTick(float DeltaTime) override;
 
 	/** Input mapping context setup */
@@ -71,11 +73,52 @@ protected:
 	/** Toggles player possession between manual control and runtime AI autopilot. */
 	void HandleToggleAutopilotPressed();
 
+	/** Bound to V: toggles cinematic orbit camera mode on/off. */
+	void HandleToggleCinematicCameraPressed();
+
+	/** Enables cinematic orbit camera mode around the active character. */
+	void EnableCinematicCameraMode();
+
+	/** Disables cinematic orbit camera mode and restores normal camera behavior. */
+	void DisableCinematicCameraMode();
+
+	/** Returns the best character actor to orbit (player pawn, autopilot pawn, or current target). */
+	AActor* ResolveCinematicTargetActor() const;
+
+	/** Resolves the preferred cinematic look-at point (head/chest when available). */
+	FVector ResolveCinematicFocusLocation(AActor* TargetActor) const;
+
+	/** Updates runtime cinematic camera transform each tick while mode is active. */
+	void UpdateCinematicCamera(float DeltaTime);
+
 	/** Enables AI autopilot over the currently possessed pawn. */
 	void EnableAutopilotForCurrentPawn();
 
 	/** Disables AI autopilot and repossesses the last autopilot pawn. */
 	void DisableAutopilotAndRepossess();
+
+public:
+
+	/** Blueprint entry point so a UI button can toggle the same cinematic camera mode as V. */
+	UFUNCTION(BlueprintCallable, Category = "Camera|Cinematic")
+	void ToggleCinematicCameraMode();
+
+protected:
+
+	/** Resets one-shot movement diagnostics after each possession change. */
+	void ResetMovementDiagnosticsState();
+
+	/**
+	 * Configures spring arm/camera after possession.
+	 * Keep camera defaults centralized here for easier camera behavior iteration.
+	 */
+	void ConfigureCameraForPawn(APawn* InPawn);
+
+	/**
+	 * Applies mouse-wheel camera zoom with clamping and interpolation.
+	 * This is the primary extension point for camera distance behavior.
+	 */
+	void ApplyMouseWheelZoom(APawn* ControlledPawn, float DeltaTime);
 
 	/** Returns true if the player should use UMG touch controls */
 	bool ShouldUseTouchControls() const;
@@ -96,7 +139,7 @@ protected:
 	UPROPERTY(EditAnywhere, Category = "Camera|Zoom")
 	float CameraZoomInterpSpeed = 10.0f;
 
-	/** Desired camera boom distance, updated by mouse wheel. */
+	/** Desired camera boom distance, updated by mouse wheel and smoothed in tick. */
 	float DesiredCameraDistance = -1.0f;
 
 	/** One-shot runtime diagnostic flag for movement/animation wiring. */
@@ -151,5 +194,101 @@ protected:
 	/** Configurable controller class used for autopilot possession. */
 	UPROPERTY(EditAnywhere, Category = "AI|Autopilot")
 	TSubclassOf<AAIController> AutopilotAIControllerClass;
+
+	/** Blend time when entering cinematic camera mode. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="0.0", ClampMax="5.0"))
+	float CinematicBlendInSeconds = 0.35f;
+
+	/** Blend time when returning to normal camera. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="0.0", ClampMax="5.0"))
+	float CinematicBlendOutSeconds = 0.35f;
+
+	/** Degrees to orbit around the target during one cinematic pan. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="1.0", ClampMax="360.0"))
+	float CinematicPanDegrees = 180.0f;
+
+	/** Time in seconds for a full cinematic pan from 0 to PanDegrees. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="0.1", ClampMax="30.0"))
+	float CinematicPanDurationSeconds = 4.0f;
+
+	/** Extra vertical offset for the look-at target (roughly upper torso). */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="-200.0", ClampMax="400.0"))
+	float CinematicLookAtZOffset = 100.0f;
+
+	/** Keep orbiting continuously after the first pan duration completes. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic")
+	bool bCinematicContinuousOrbit = true;
+
+	/** Orbit speed multiplier. 0.2 means five times slower than base pan speed. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="0.05", ClampMax="3.0"))
+	float CinematicOrbitSpeedScale = 0.2f;
+
+	/** Swap clockwise/counter-clockwise direction after this many full 360 turns. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="1", ClampMax="20"))
+	int32 CinematicTurnsPerDirection = 1;
+
+	/** Desired close-up orbit radius for movie-like framing. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="80.0", ClampMax="500.0"))
+	float CinematicCloseOrbitRadius = 105.0f;
+
+	/** How strongly to frame toward the head vs chest (0=chest, 1=head). */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="0.0", ClampMax="1.0"))
+	float CinematicHeadFocusAlpha = 0.80f;
+
+	/** Horizontal handheld sway amplitude in centimeters. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="0.0", ClampMax="80.0"))
+	float CinematicSwayHorizontalAmplitude = 8.0f;
+
+	/** Vertical handheld sway amplitude in centimeters. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="0.0", ClampMax="80.0"))
+	float CinematicSwayVerticalAmplitude = 4.0f;
+
+	/** Base handheld sway frequency in Hz. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic", meta=(ClampMin="0.1", ClampMax="5.0"))
+	float CinematicSwayFrequency = 0.85f;
+
+	/** If true, movement/look input is ignored while cinematic mode is active. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic")
+	bool bDisablePlayerInputInCinematic = true;
+
+	/** Runtime cinematic mode state. */
+	bool bCinematicCameraModeEnabled = false;
+
+	/** Current pan elapsed time in seconds. */
+	float CinematicPanElapsedSeconds = 0.0f;
+
+	/** Orbit radius captured when cinematic mode starts. */
+	float CinematicOrbitRadius = 400.0f;
+
+	/** Orbit yaw at start of cinematic mode. */
+	float CinematicStartOrbitYawDegrees = 0.0f;
+
+	/** Signed accumulated yaw offset from orbit start. */
+	float CinematicOrbitAccumulatedYawDegrees = 0.0f;
+
+	/** Current orbit direction. +1 = counter-clockwise, -1 = clockwise. */
+	int32 CinematicOrbitDirectionSign = 1;
+
+	/** Yaw distance traveled in the current direction bucket (degrees). */
+	float CinematicDirectionTravelDegrees = 0.0f;
+
+	/** Count of full turns completed in current direction bucket. */
+	int32 CinematicCompletedTurnsThisDirection = 0;
+
+	/** Camera height offset relative to target when cinematic mode starts. */
+	float CinematicCameraHeightOffset = 120.0f;
+
+	/** Per-session phase offset to avoid overly synthetic periodic movement. */
+	float CinematicSwayPhaseOffset = 0.0f;
+
+	/** Actor that camera orbits around while cinematic mode is active. */
+	TWeakObjectPtr<AActor> CinematicTargetActor;
+
+	/** View target to restore when cinematic mode ends. */
+	TWeakObjectPtr<AActor> PreCinematicViewTarget;
+
+	/** Runtime camera actor used for cinematic orbit view. */
+	UPROPERTY(Transient)
+	TObjectPtr<ACameraActor> RuntimeCinematicCameraActor;
 
 };

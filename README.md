@@ -3,15 +3,14 @@
 UE 5.7 C++ project.
 Direct possession of a placed MetaHuman Pawn/Character.
 
-Status: ongoing.
-AI not implemented yet.
+Status: Ongoing.
 
-## Core Idea
+## Start
 - Keep one placed actor named `MAIN_CHARACTER`.
 - Possess that actor directly at runtime.
 - Avoid default spawn flow unless fallback is enabled.
 
-## Important Classes
+## Classes
 - `charactersGameMode`
 	- `RestartPlayer` searches for `MAIN_CHARACTER` first.
 	- Falls back to normal spawn only when configured.
@@ -23,33 +22,24 @@ AI not implemented yet.
 	- Stable direct possession target.
 	- MetaHuman mesh sync via `LeaderPose`.
 
-## Required Level Setup
+## Level Setup
 - Place 1 Pawn/Character named `MAIN_CHARACTER`.
 - Prefer a Blueprint derived from `AcharactersMHPlayer`.
 - Set gameplay classes to:
 	- `charactersGameMode`
 	- `charactersPlayerController`
 
-## Most Important Folders
+## Folders in VC
+
 - `Source/`
 	- Main C++ gameplay code and targets.
 - `Config/`
 	- Project runtime and editor settings.
 - `Content/`
 	- Maps, Blueprints, MetaHumans, assets.
-- `Binaries/`, `Builds/`
-	- Build outputs and packaged artifacts.
-- `Saved/`, `Intermediate/`, `DerivedDataCache/`
-	- Generated/cache/debug data.
 
 ## Run
 - In VS Code: press `Ctrl + F5`.
 - Build task: `charactersEditor Win64 Development`.
 - Start PIE and confirm one `MAIN_CHARACTER` exists.
-
-## Diagnostics
-- Runtime logs include:
-	- movement state,
-	- mesh animation wiring,
-	- grounding/offset checks.
 

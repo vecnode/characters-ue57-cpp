@@ -1,4 +1,5 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Based on Unreal Engine template code.
+// Project-specific implementation and modifications Copyright (c) vecnode, 2026.
 
 
 #include "charactersPlayerController.h"
@@ -11,10 +12,12 @@
 #include "charactersHUD.h"
 #include "charactersGameInstance.h"
 #include "charactersWanderAIController.h"
+#include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "Components/SkeletalMeshComponent.h"
-#include "Engine/Engine.h"
+#include "Engine/World.h"
+#include "Camera/PlayerCameraManager.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/CharacterMovementComponent.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -24,6 +27,28 @@
 
 namespace
 {
+	bool TryGetFirstValidSocketLocation(
+		const USkeletalMeshComponent* Mesh,
+		const TArray<FName>& CandidateSockets,
+		FVector& OutLocation)
+	{
+		if (!Mesh)
+		{
+			return false;
+		}
+
+		for (const FName& SocketName : CandidateSockets)
+		{
+			if (Mesh->DoesSocketExist(SocketName))
+			{
+				OutLocation = Mesh->GetSocketLocation(SocketName);
+				return true;
+			}
+		}
+
+		return false;
+	}
+
 	UInputMappingContext* ResolveMappingContextWithFallback(
 		const TSoftObjectPtr<UInputMappingContext>& SoftReference,
 		const TCHAR* LegacyPath,
@@ -70,34 +95,8 @@ void AcharactersPlayerController::OnPossess(APawn* InPawn)
 		return;
 	}
 
-	bLoggedMovementAnimDiagnostics = false;
-	bMovementProbeActive = false;
-	MovementProbeElapsed = 0.0f;
-	MovementProbePeakSpeed2D = 0.0f;
-	MovementProbePeakAcceleration2D = 0.0f;
-	MovementProbeSampleCount = 0;
-
-	// Find spring arm and camera on the newly possessed pawn.
-	// Works for any character (Blueprint MetaHuman, AcharactersCharacter subclass, etc.)
-	USpringArmComponent* SpringArm = InPawn->FindComponentByClass<USpringArmComponent>();
-	UCameraComponent* FollowCam   = InPawn->FindComponentByClass<UCameraComponent>();
-
-	if (SpringArm)
-	{
-		SpringArm->bUsePawnControlRotation = true;
-		SpringArm->bDoCollisionTest        = false;
-		DesiredCameraDistance = FMath::Clamp(SpringArm->TargetArmLength, MinCameraDistance, MaxCameraDistance);
-	}
-
-	if (FollowCam)
-	{
-		FollowCam->bUsePawnControlRotation = false;
-		FollowCam->Activate();
-	}
-
-	// Disable auto camera management so UE does not fight our view target.
-	bAutoManageActiveCameraTarget = false;
-	SetViewTargetWithBlend(InPawn, 0.0f);
+	ResetMovementDiagnosticsState();
+	ConfigureCameraForPawn(InPawn);
 
 	if (ACharacter* PossessedCharacter = Cast<ACharacter>(InPawn))
 	{
@@ -193,11 +192,104 @@ void AcharactersPlayerController::OnPossess(APawn* InPawn)
 	}
 
 	UE_LOG(Logcharacters, Log,
-		TEXT("AcharactersPlayerController: Possessed '%s' (%s). SpringArm=%s Camera=%s."),
+		TEXT("AcharactersPlayerController: Possessed '%s' (%s)."),
 		*GetNameSafe(InPawn),
-		*InPawn->GetClass()->GetName(),
+		*InPawn->GetClass()->GetName());
+}
+
+void AcharactersPlayerController::ResetMovementDiagnosticsState()
+{
+	bLoggedMovementAnimDiagnostics = false;
+	bMovementProbeActive = false;
+	MovementProbeElapsed = 0.0f;
+	MovementProbePeakSpeed2D = 0.0f;
+	MovementProbePeakAcceleration2D = 0.0f;
+	MovementProbeSampleCount = 0;
+}
+
+void AcharactersPlayerController::ConfigureCameraForPawn(APawn* InPawn)
+{
+	if (!InPawn)
+	{
+		return;
+	}
+
+	// Works for any pawn that exposes a spring arm + camera pair.
+	USpringArmComponent* SpringArm = InPawn->FindComponentByClass<USpringArmComponent>();
+	UCameraComponent* FollowCam = InPawn->FindComponentByClass<UCameraComponent>();
+
+	if (SpringArm)
+	{
+		SpringArm->bUsePawnControlRotation = true;
+		SpringArm->bDoCollisionTest = false;
+		DesiredCameraDistance = FMath::Clamp(SpringArm->TargetArmLength, MinCameraDistance, MaxCameraDistance);
+	}
+
+	if (FollowCam)
+	{
+		FollowCam->bUsePawnControlRotation = false;
+		FollowCam->Activate();
+	}
+
+	// Disable auto camera management so UE does not fight our view target.
+	bAutoManageActiveCameraTarget = false;
+	SetViewTargetWithBlend(InPawn, 0.0f);
+
+	UE_LOG(Logcharacters, Log,
+		TEXT("CameraSetup: Pawn='%s' SpringArm=%s Camera=%s TargetDistance=%.2f"),
+		*GetNameSafe(InPawn),
 		SpringArm ? TEXT("found") : TEXT("MISSING"),
-		FollowCam  ? TEXT("found") : TEXT("MISSING"));
+		FollowCam ? TEXT("found") : TEXT("MISSING"),
+		DesiredCameraDistance);
+}
+
+void AcharactersPlayerController::ApplyMouseWheelZoom(APawn* ControlledPawn, float DeltaTime)
+{
+	if (!ControlledPawn)
+	{
+		return;
+	}
+
+	USpringArmComponent* SpringArm = ControlledPawn->FindComponentByClass<USpringArmComponent>();
+	if (!SpringArm)
+	{
+		return;
+	}
+
+	if (DesiredCameraDistance < 0.0f)
+	{
+		DesiredCameraDistance = FMath::Clamp(SpringArm->TargetArmLength, MinCameraDistance, MaxCameraDistance);
+	}
+
+	bool bConsumedDiscreteWheelInput = false;
+	if (WasInputKeyJustPressed(EKeys::MouseScrollUp))
+	{
+		DesiredCameraDistance -= MouseWheelZoomStep;
+		bConsumedDiscreteWheelInput = true;
+	}
+	if (WasInputKeyJustPressed(EKeys::MouseScrollDown))
+	{
+		DesiredCameraDistance += MouseWheelZoomStep;
+		bConsumedDiscreteWheelInput = true;
+	}
+
+	// Standalone/shipping builds often report wheel movement through axis input
+	// instead of the discrete MouseScrollUp/MouseScrollDown key events.
+	if (!bConsumedDiscreteWheelInput)
+	{
+		const float WheelAxis = GetInputAnalogKeyState(EKeys::MouseWheelAxis);
+		if (!FMath::IsNearlyZero(WheelAxis, KINDA_SMALL_NUMBER))
+		{
+			DesiredCameraDistance -= WheelAxis * MouseWheelZoomStep;
+		}
+	}
+
+	DesiredCameraDistance = FMath::Clamp(DesiredCameraDistance, MinCameraDistance, MaxCameraDistance);
+	SpringArm->TargetArmLength = FMath::FInterpTo(
+		SpringArm->TargetArmLength,
+		DesiredCameraDistance,
+		DeltaTime,
+		CameraZoomInterpSpeed);
 }
 
 void AcharactersPlayerController::PlayerTick(float DeltaTime)
@@ -209,13 +301,18 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 		return;
 	}
 
+	if (bCinematicCameraModeEnabled)
+	{
+		UpdateCinematicCamera(DeltaTime);
+	}
+
 	APawn* ControlledPawn = GetPawn();
-	if (!ControlledPawn)
+	if (!ControlledPawn && !bCinematicCameraModeEnabled)
 	{
 		return;
 	}
 
-	if (bEnableKeyboardFallbackMovement)
+	if (ControlledPawn && bEnableKeyboardFallbackMovement && !bCinematicCameraModeEnabled)
 	{
 		const float ForwardRaw =
 			(IsInputKeyDown(EKeys::W) || IsInputKeyDown(EKeys::Up) ? 1.0f : 0.0f) -
@@ -237,7 +334,7 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 		}
 	}
 
-	if (bEnableMouseFallbackLook)
+	if (ControlledPawn && bEnableMouseFallbackLook && !bCinematicCameraModeEnabled)
 	{
 		float MouseDeltaX = 0.0f;
 		float MouseDeltaY = 0.0f;
@@ -250,7 +347,7 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 		}
 	}
 
-	if (!bLoggedMovementAnimDiagnostics)
+	if (ControlledPawn && !bLoggedMovementAnimDiagnostics)
 	{
 		const float Speed2D = ControlledPawn->GetVelocity().Size2D();
 		if (Speed2D > 10.0f)
@@ -420,46 +517,10 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 		}
 	}
 
-	USpringArmComponent* SpringArm = ControlledPawn->FindComponentByClass<USpringArmComponent>();
-	if (!SpringArm)
+	if (ControlledPawn && !bCinematicCameraModeEnabled)
 	{
-		return;
+		ApplyMouseWheelZoom(ControlledPawn, DeltaTime);
 	}
-
-	if (DesiredCameraDistance < 0.0f)
-	{
-		DesiredCameraDistance = FMath::Clamp(SpringArm->TargetArmLength, MinCameraDistance, MaxCameraDistance);
-	}
-
-	bool bConsumedDiscreteWheelInput = false;
-	if (WasInputKeyJustPressed(EKeys::MouseScrollUp))
-	{
-		DesiredCameraDistance -= MouseWheelZoomStep;
-		bConsumedDiscreteWheelInput = true;
-	}
-	if (WasInputKeyJustPressed(EKeys::MouseScrollDown))
-	{
-		DesiredCameraDistance += MouseWheelZoomStep;
-		bConsumedDiscreteWheelInput = true;
-	}
-
-	// Standalone/shipping builds often report wheel movement through axis input
-	// instead of the discrete MouseScrollUp/MouseScrollDown key events.
-	if (!bConsumedDiscreteWheelInput)
-	{
-		const float WheelAxis = GetInputAnalogKeyState(EKeys::MouseWheelAxis);
-		if (!FMath::IsNearlyZero(WheelAxis, KINDA_SMALL_NUMBER))
-		{
-			DesiredCameraDistance -= WheelAxis * MouseWheelZoomStep;
-		}
-	}
-
-	DesiredCameraDistance = FMath::Clamp(DesiredCameraDistance, MinCameraDistance, MaxCameraDistance);
-	SpringArm->TargetArmLength = FMath::FInterpTo(
-		SpringArm->TargetArmLength,
-		DesiredCameraDistance,
-		DeltaTime,
-		CameraZoomInterpSpeed);
 }
 
 void AcharactersPlayerController::BeginPlay()
@@ -506,6 +567,7 @@ void AcharactersPlayerController::SetupInputComponent()
 			InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AcharactersPlayerController::HandleEscapePressed);
 			InputComponent->BindKey(EKeys::Y, IE_Pressed, this, &AcharactersPlayerController::HandleYPressed);
 			InputComponent->BindKey(EKeys::J, IE_Pressed, this, &AcharactersPlayerController::HandleToggleAutopilotPressed);
+			InputComponent->BindKey(EKeys::V, IE_Pressed, this, &AcharactersPlayerController::HandleToggleCinematicCameraPressed);
 			bUtilityKeysBound = true;
 		}
 	}
@@ -635,6 +697,321 @@ void AcharactersPlayerController::HandleToggleAutopilotPressed()
 	}
 }
 
+void AcharactersPlayerController::HandleToggleCinematicCameraPressed()
+{
+	ToggleCinematicCameraMode();
+}
+
+void AcharactersPlayerController::ToggleCinematicCameraMode()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (bCinematicCameraModeEnabled)
+	{
+		DisableCinematicCameraMode();
+	}
+	else
+	{
+		EnableCinematicCameraMode();
+	}
+}
+
+AActor* AcharactersPlayerController::ResolveCinematicTargetActor() const
+{
+	if (APawn* ControlledPawn = GetPawn())
+	{
+		return ControlledPawn;
+	}
+
+	if (AutopilotPawn.IsValid())
+	{
+		return AutopilotPawn.Get();
+	}
+
+	if (AActor* ViewTarget = GetViewTarget())
+	{
+		return ViewTarget;
+	}
+
+	return nullptr;
+}
+
+FVector AcharactersPlayerController::ResolveCinematicFocusLocation(AActor* TargetActor) const
+{
+	if (!TargetActor)
+	{
+		return FVector::ZeroVector;
+	}
+
+	const FVector FallbackLocation = TargetActor->GetActorLocation() + FVector(0.0f, 0.0f, CinematicLookAtZOffset);
+
+	const ACharacter* TargetCharacter = Cast<ACharacter>(TargetActor);
+	if (!TargetCharacter)
+	{
+		return FallbackLocation;
+	}
+
+	const USkeletalMeshComponent* Mesh = TargetCharacter->GetMesh();
+	if (!Mesh)
+	{
+		return FallbackLocation;
+	}
+
+	FVector HeadLocation = FVector::ZeroVector;
+	FVector ChestLocation = FVector::ZeroVector;
+
+	const bool bHasHead = TryGetFirstValidSocketLocation(
+		Mesh,
+		{TEXT("head"), TEXT("Head"), TEXT("headSocket"), TEXT("neck_01")},
+		HeadLocation);
+
+	const bool bHasChest = TryGetFirstValidSocketLocation(
+		Mesh,
+		{TEXT("spine_03"), TEXT("spine_02"), TEXT("Spine_03"), TEXT("chest")},
+		ChestLocation);
+
+	if (bHasHead && bHasChest)
+	{
+		return FMath::Lerp(ChestLocation, HeadLocation, FMath::Clamp(CinematicHeadFocusAlpha, 0.0f, 1.0f));
+	}
+
+	if (bHasHead)
+	{
+		return HeadLocation;
+	}
+
+	if (bHasChest)
+	{
+		return ChestLocation;
+	}
+
+	return FallbackLocation;
+}
+
+void AcharactersPlayerController::EnableCinematicCameraMode()
+{
+	if (bCinematicCameraModeEnabled)
+	{
+		return;
+	}
+
+	UWorld* World = GetWorld();
+	if (!World || !PlayerCameraManager)
+	{
+		return;
+	}
+
+	AActor* TargetActor = ResolveCinematicTargetActor();
+	if (!TargetActor)
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("CinematicCamera: no valid target actor found."));
+		return;
+	}
+
+	if (!RuntimeCinematicCameraActor || !IsValid(RuntimeCinematicCameraActor))
+	{
+		FActorSpawnParameters SpawnParams;
+		SpawnParams.ObjectFlags |= RF_Transient;
+		SpawnParams.SpawnCollisionHandlingOverride = ESpawnActorCollisionHandlingMethod::AlwaysSpawn;
+		RuntimeCinematicCameraActor = World->SpawnActor<ACameraActor>(
+			ACameraActor::StaticClass(),
+			PlayerCameraManager->GetCameraLocation(),
+			PlayerCameraManager->GetCameraRotation(),
+			SpawnParams);
+	}
+
+	if (!RuntimeCinematicCameraActor)
+	{
+		UE_LOG(Logcharacters, Error, TEXT("CinematicCamera: failed to spawn runtime camera actor."));
+		return;
+	}
+
+	PreCinematicViewTarget = GetViewTarget();
+	CinematicTargetActor = TargetActor;
+	CinematicPanElapsedSeconds = 0.0f;
+	CinematicSwayPhaseOffset = FMath::FRandRange(0.0f, 2.0f * PI);
+	CinematicOrbitAccumulatedYawDegrees = 0.0f;
+	CinematicOrbitDirectionSign = 1;
+	CinematicDirectionTravelDegrees = 0.0f;
+	CinematicCompletedTurnsThisDirection = 0;
+
+	const FVector CameraLocation = PlayerCameraManager->GetCameraLocation();
+	const FVector TargetLocation = ResolveCinematicFocusLocation(TargetActor);
+	const FVector ToCamera = CameraLocation - TargetLocation;
+	const FVector ToCameraXY(ToCamera.X, ToCamera.Y, 0.0f);
+
+	CinematicOrbitRadius = FMath::Clamp(
+		ToCameraXY.Size(),
+		CinematicCloseOrbitRadius * 0.65f,
+		CinematicCloseOrbitRadius * 1.35f);
+	CinematicOrbitRadius = FMath::Max(100.0f, CinematicOrbitRadius);
+	if (ToCameraXY.IsNearlyZero())
+	{
+		CinematicOrbitRadius = CinematicCloseOrbitRadius;
+	}
+	CinematicStartOrbitYawDegrees = ToCameraXY.IsNearlyZero()
+		? TargetActor->GetActorRotation().Yaw
+		: ToCameraXY.Rotation().Yaw;
+	CinematicCameraHeightOffset = FMath::Clamp(ToCamera.Z, 30.0f, 160.0f);
+
+	RuntimeCinematicCameraActor->SetActorLocationAndRotation(
+		CameraLocation,
+		PlayerCameraManager->GetCameraRotation());
+
+	SetViewTargetWithBlend(RuntimeCinematicCameraActor, CinematicBlendInSeconds);
+	bCinematicCameraModeEnabled = true;
+
+	if (bDisablePlayerInputInCinematic)
+	{
+		SetIgnoreMoveInput(true);
+		SetIgnoreLookInput(true);
+	}
+
+	UE_LOG(Logcharacters, Log,
+		TEXT("CinematicCamera: ENABLED around '%s' (degrees=%.1f duration=%.2fs continuous=%s closeRadius=%.1f speedScale=%.2f turnsPerDirection=%d). Press V to exit."),
+		*GetNameSafe(TargetActor),
+		CinematicPanDegrees,
+		CinematicPanDurationSeconds,
+		bCinematicContinuousOrbit ? TEXT("true") : TEXT("false"),
+		CinematicOrbitRadius,
+		CinematicOrbitSpeedScale,
+		CinematicTurnsPerDirection);
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(TEXT("Cinematic Camera: ON (V to exit)"), FColor::Cyan, 2.0f);
+	}
+}
+
+void AcharactersPlayerController::DisableCinematicCameraMode()
+{
+	if (!bCinematicCameraModeEnabled)
+	{
+		return;
+	}
+
+	bCinematicCameraModeEnabled = false;
+	CinematicPanElapsedSeconds = 0.0f;
+	CinematicOrbitAccumulatedYawDegrees = 0.0f;
+	CinematicDirectionTravelDegrees = 0.0f;
+	CinematicCompletedTurnsThisDirection = 0;
+	CinematicTargetActor.Reset();
+
+	if (bDisablePlayerInputInCinematic)
+	{
+		SetIgnoreMoveInput(false);
+		SetIgnoreLookInput(false);
+	}
+
+	AActor* RestoreViewTarget = nullptr;
+	if (PreCinematicViewTarget.IsValid())
+	{
+		RestoreViewTarget = PreCinematicViewTarget.Get();
+	}
+	else if (APawn* ControlledPawn = GetPawn())
+	{
+		RestoreViewTarget = ControlledPawn;
+	}
+	else if (AutopilotPawn.IsValid())
+	{
+		RestoreViewTarget = AutopilotPawn.Get();
+	}
+
+	if (RestoreViewTarget)
+	{
+		SetViewTargetWithBlend(RestoreViewTarget, CinematicBlendOutSeconds);
+	}
+
+	PreCinematicViewTarget.Reset();
+
+	UE_LOG(Logcharacters, Log, TEXT("CinematicCamera: DISABLED. Restored normal camera."));
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(TEXT("Cinematic Camera: OFF"), FColor::Green, 2.0f);
+	}
+}
+
+void AcharactersPlayerController::UpdateCinematicCamera(float DeltaTime)
+{
+	if (!bCinematicCameraModeEnabled || !RuntimeCinematicCameraActor)
+	{
+		return;
+	}
+
+	AActor* TargetActor = CinematicTargetActor.Get();
+	if (!TargetActor)
+	{
+		DisableCinematicCameraMode();
+		return;
+	}
+
+	CinematicPanElapsedSeconds += DeltaTime;
+	const float Duration = FMath::Max(0.1f, CinematicPanDurationSeconds);
+	const float BaseDegreesPerSecond = CinematicPanDegrees / Duration;
+	const float SpeedScale = FMath::Max(0.05f, CinematicOrbitSpeedScale);
+	const float MaxTravelDegreesForOneShot = FMath::Abs(CinematicPanDegrees);
+
+	float DeltaYawDegrees = BaseDegreesPerSecond * DeltaTime * SpeedScale * static_cast<float>(CinematicOrbitDirectionSign);
+	if (!bCinematicContinuousOrbit)
+	{
+		const float Remaining = MaxTravelDegreesForOneShot - FMath::Abs(CinematicOrbitAccumulatedYawDegrees);
+		if (Remaining <= KINDA_SMALL_NUMBER)
+		{
+			DeltaYawDegrees = 0.0f;
+		}
+		else
+		{
+			DeltaYawDegrees = FMath::Clamp(DeltaYawDegrees, -Remaining, Remaining);
+		}
+	}
+
+	CinematicOrbitAccumulatedYawDegrees += DeltaYawDegrees;
+
+	if (bCinematicContinuousOrbit && !FMath::IsNearlyZero(DeltaYawDegrees))
+	{
+		CinematicDirectionTravelDegrees += FMath::Abs(DeltaYawDegrees);
+
+		while (CinematicDirectionTravelDegrees >= 360.0f)
+		{
+			CinematicDirectionTravelDegrees -= 360.0f;
+			++CinematicCompletedTurnsThisDirection;
+
+			if (CinematicCompletedTurnsThisDirection >= FMath::Max(1, CinematicTurnsPerDirection))
+			{
+				CinematicCompletedTurnsThisDirection = 0;
+				CinematicOrbitDirectionSign *= -1;
+			}
+		}
+	}
+
+	const float CurrentOrbitYaw = CinematicStartOrbitYawDegrees + CinematicOrbitAccumulatedYawDegrees;
+	const float OrbitYawRadians = FMath::DegreesToRadians(CurrentOrbitYaw);
+	const float BaseFrequencyRadians = FMath::Max(0.1f, CinematicSwayFrequency) * 2.0f * PI;
+	const float TimeWithPhase = CinematicPanElapsedSeconds + CinematicSwayPhaseOffset;
+	const float HorizontalSway = FMath::Sin(TimeWithPhase * BaseFrequencyRadians) * CinematicSwayHorizontalAmplitude;
+	const float VerticalSway = FMath::Sin((TimeWithPhase * BaseFrequencyRadians * 0.57f) + 1.2f) * CinematicSwayVerticalAmplitude;
+
+	FVector TargetLocation = ResolveCinematicFocusLocation(TargetActor);
+	if (const ACharacter* TargetCharacter = Cast<ACharacter>(TargetActor))
+	{
+		TargetLocation += TargetCharacter->GetVelocity() * 0.05f;
+	}
+
+	const FVector OrbitDirection(FMath::Cos(OrbitYawRadians), FMath::Sin(OrbitYawRadians), 0.0f);
+	const FVector OrbitRight(-OrbitDirection.Y, OrbitDirection.X, 0.0f);
+	const FVector NewCameraLocation(
+		TargetLocation.X + (OrbitDirection.X * CinematicOrbitRadius) + (OrbitRight.X * HorizontalSway),
+		TargetLocation.Y + (OrbitDirection.Y * CinematicOrbitRadius) + (OrbitRight.Y * HorizontalSway),
+		TargetLocation.Z + CinematicCameraHeightOffset + VerticalSway);
+
+	const FRotator NewCameraRotation = (TargetLocation - NewCameraLocation).Rotation();
+	RuntimeCinematicCameraActor->SetActorLocationAndRotation(NewCameraLocation, NewCameraRotation);
+}
+
 void AcharactersPlayerController::EnableAutopilotForCurrentPawn()
 {
 	APawn* ControlledPawn = GetPawn();
@@ -679,6 +1056,8 @@ void AcharactersPlayerController::EnableAutopilotForCurrentPawn()
 	{
 		charactersHUD->AddTransientMessage(TEXT("AI Control: ON (press J to return)"), FColor::Cyan, 2.5f);
 	}
+
+	EnableCinematicCameraMode();
 }
 
 void AcharactersPlayerController::DisableAutopilotAndRepossess()
@@ -716,6 +1095,8 @@ void AcharactersPlayerController::DisableAutopilotAndRepossess()
 	{
 		charactersHUD->AddTransientMessage(TEXT("AI Control: OFF (player control restored)"), FColor::Green, 2.5f);
 	}
+
+	DisableCinematicCameraMode();
 }
 
 bool AcharactersPlayerController::ShouldUseTouchControls() const

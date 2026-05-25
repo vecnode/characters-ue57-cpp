@@ -1,4 +1,5 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Based on Unreal Engine template code.
+// Project-specific implementation and modifications Copyright (c) vecnode, 2026.
 
 #pragma once
 
@@ -13,8 +14,6 @@ class UCameraComponent;
 class UInputAction;
 class AcharactersHUD;
 struct FInputActionValue;
-
-DECLARE_LOG_CATEGORY_EXTERN(LogTemplateCharacter, Log, All);
 
 /**
  *  A simple player-controllable third person character
@@ -77,9 +76,6 @@ protected:
 	/** Initialize input action bindings */
 	virtual void SetupPlayerInputComponent(class UInputComponent* PlayerInputComponent) override;
 
-	/** Per-frame update used for debug key checks */
-	virtual void Tick(float DeltaSeconds) override;
-
 protected:
 
 	/** Called for movement input */
@@ -88,19 +84,7 @@ protected:
 	/** Called for looking input */
 	void Look(const FInputActionValue& Value);
 
-	void HandleMoveForwardPressed();
-	void HandleMoveForwardReleased();
-	void HandleMoveBackwardPressed();
-	void HandleMoveBackwardReleased();
-	void HandleMoveRightPressed();
-	void HandleMoveRightReleased();
-	void HandleMoveLeftPressed();
-	void HandleMoveLeftReleased();
-	void HandleJumpPressedFallback();
-	void HandleJumpReleasedFallback();
-	void ApplyKeyboardMovementFallback();
-
-	/** Prints hello world and the character world position when the H key is pressed */
+	/** Prints hello world and the character world position when the H key is pressed. */
 	void PrintHelloWorld();
 
 public:
@@ -120,11 +104,6 @@ public:
 	/** Handles jump pressed inputs from either controls or UI interfaces */
 	UFUNCTION(BlueprintCallable, Category="Input")
 	virtual void DoJumpEnd();
-
-private:
-
-	float KeyboardForwardInput = 0.0f;
-	float KeyboardRightInput = 0.0f;
 
 public:
 

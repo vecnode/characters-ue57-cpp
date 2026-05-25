@@ -1,7 +1,7 @@
-// Copyright Epic Games, Inc. All Rights Reserved.
+// Based on Unreal Engine template code.
+// Project-specific implementation and modifications Copyright (c) vecnode, 2026.
 
 #include "charactersCharacter.h"
-#include "Engine/LocalPlayer.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -78,7 +78,7 @@ AcharactersCharacter::AcharactersCharacter()
 
 	// Note: For faster iteration times these variables, and many more, can be tweaked in the Character Blueprint
 	// instead of recompiling to adjust them
-	GetCharacterMovement()->JumpZVelocity = 500.f;
+	GetCharacterMovement()->JumpZVelocity = 300.f;
 	GetCharacterMovement()->AirControl = 0.35f;
 	GetCharacterMovement()->MaxWalkSpeed = 350.f;
 	GetCharacterMovement()->MinAnalogWalkSpeed = 20.f;
@@ -184,35 +184,10 @@ void AcharactersCharacter::SetupPlayerInputComponent(UInputComponent* PlayerInpu
 		UE_LOG(Logcharacters, Error, TEXT("'%s' Failed to find an Enhanced Input component! This template is built to use the Enhanced Input system. If you intend to use the legacy system, then you will need to update this C++ file."), *GetNameSafe(this));
 	}
 
-	// Bind debug key as an input event so it works even when actor tick is disabled.
+	// Keep debug-only key handling local to the character.
+	// Movement/look raw-key fallback is centralized in AcharactersPlayerController
+	// to avoid duplicate movement input application.
 	PlayerInputComponent->BindKey(EKeys::H, IE_Pressed, this, &AcharactersCharacter::PrintHelloWorld);
-	PlayerInputComponent->BindKey(EKeys::W, IE_Pressed, this, &AcharactersCharacter::HandleMoveForwardPressed);
-	PlayerInputComponent->BindKey(EKeys::W, IE_Released, this, &AcharactersCharacter::HandleMoveForwardReleased);
-	PlayerInputComponent->BindKey(EKeys::S, IE_Pressed, this, &AcharactersCharacter::HandleMoveBackwardPressed);
-	PlayerInputComponent->BindKey(EKeys::S, IE_Released, this, &AcharactersCharacter::HandleMoveBackwardReleased);
-	PlayerInputComponent->BindKey(EKeys::A, IE_Pressed, this, &AcharactersCharacter::HandleMoveLeftPressed);
-	PlayerInputComponent->BindKey(EKeys::A, IE_Released, this, &AcharactersCharacter::HandleMoveLeftReleased);
-	PlayerInputComponent->BindKey(EKeys::D, IE_Pressed, this, &AcharactersCharacter::HandleMoveRightPressed);
-	PlayerInputComponent->BindKey(EKeys::D, IE_Released, this, &AcharactersCharacter::HandleMoveRightReleased);
-
-	PlayerInputComponent->BindKey(EKeys::Up, IE_Pressed, this, &AcharactersCharacter::HandleMoveForwardPressed);
-	PlayerInputComponent->BindKey(EKeys::Up, IE_Released, this, &AcharactersCharacter::HandleMoveForwardReleased);
-	PlayerInputComponent->BindKey(EKeys::Down, IE_Pressed, this, &AcharactersCharacter::HandleMoveBackwardPressed);
-	PlayerInputComponent->BindKey(EKeys::Down, IE_Released, this, &AcharactersCharacter::HandleMoveBackwardReleased);
-	PlayerInputComponent->BindKey(EKeys::Left, IE_Pressed, this, &AcharactersCharacter::HandleMoveLeftPressed);
-	PlayerInputComponent->BindKey(EKeys::Left, IE_Released, this, &AcharactersCharacter::HandleMoveLeftReleased);
-	PlayerInputComponent->BindKey(EKeys::Right, IE_Pressed, this, &AcharactersCharacter::HandleMoveRightPressed);
-	PlayerInputComponent->BindKey(EKeys::Right, IE_Released, this, &AcharactersCharacter::HandleMoveRightReleased);
-
-	PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Pressed, this, &AcharactersCharacter::HandleJumpPressedFallback);
-	PlayerInputComponent->BindKey(EKeys::SpaceBar, IE_Released, this, &AcharactersCharacter::HandleJumpReleasedFallback);
-
-}
-
-void AcharactersCharacter::Tick(float DeltaSeconds)
-{
-	Super::Tick(DeltaSeconds);
-	ApplyKeyboardMovementFallback();
 }
 
 void AcharactersCharacter::Move(const FInputActionValue& Value)
@@ -303,74 +278,4 @@ void AcharactersCharacter::PrintHelloWorld()
 		}
 	}
 
-}
-
-void AcharactersCharacter::HandleMoveForwardPressed()
-{
-	KeyboardForwardInput = 1.0f;
-}
-
-void AcharactersCharacter::HandleMoveForwardReleased()
-{
-	if (KeyboardForwardInput > 0.0f)
-	{
-		KeyboardForwardInput = 0.0f;
-	}
-}
-
-void AcharactersCharacter::HandleMoveBackwardPressed()
-{
-	KeyboardForwardInput = -1.0f;
-}
-
-void AcharactersCharacter::HandleMoveBackwardReleased()
-{
-	if (KeyboardForwardInput < 0.0f)
-	{
-		KeyboardForwardInput = 0.0f;
-	}
-}
-
-void AcharactersCharacter::HandleMoveRightPressed()
-{
-	KeyboardRightInput = 1.0f;
-}
-
-void AcharactersCharacter::HandleMoveRightReleased()
-{
-	if (KeyboardRightInput > 0.0f)
-	{
-		KeyboardRightInput = 0.0f;
-	}
-}
-
-void AcharactersCharacter::HandleMoveLeftPressed()
-{
-	KeyboardRightInput = -1.0f;
-}
-
-void AcharactersCharacter::HandleMoveLeftReleased()
-{
-	if (KeyboardRightInput < 0.0f)
-	{
-		KeyboardRightInput = 0.0f;
-	}
-}
-
-void AcharactersCharacter::HandleJumpPressedFallback()
-{
-	DoJumpStart();
-}
-
-void AcharactersCharacter::HandleJumpReleasedFallback()
-{
-	DoJumpEnd();
-}
-
-void AcharactersCharacter::ApplyKeyboardMovementFallback()
-{
-	if (!FMath::IsNearlyZero(KeyboardForwardInput) || !FMath::IsNearlyZero(KeyboardRightInput))
-	{
-		DoMove(KeyboardRightInput, KeyboardForwardInput);
-	}
 }
