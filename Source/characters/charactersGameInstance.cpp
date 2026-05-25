@@ -3,6 +3,7 @@
 #include "charactersGameInstance.h"
 #include "characters.h"
 #include "charactersCharacter.h"
+#include "charactersHUD.h"
 #include "Engine/World.h"
 #include "HttpPath.h"
 #include "IHttpRouter.h"
@@ -188,7 +189,7 @@ FString UcharactersGameInstance::GetLocalHttpServerStatusText() const
 	const TCHAR* BoundText = LocalHttpRouter.IsValid() ? TEXT("bound") : TEXT("not-bound");
 
 	return FString::Printf(
-		TEXT("HTTP %s, port=%d, router=%s, endpoints=/health,/echo"),
+		TEXT("HTTP %s, port=%d, router=%s, endpoints=/health,/echo,/notify"),
 		EnabledText,
 		LocalHttpServerPort,
 		BoundText);
@@ -219,6 +220,7 @@ void UcharactersGameInstance::StartLocalHttpServer()
 
 	const FHttpRequestHandler HealthHandler = FHttpRequestHandler::CreateUObject(this, &UcharactersGameInstance::HandleHealthRequest);
 	const FHttpRequestHandler EchoHandler = FHttpRequestHandler::CreateUObject(this, &UcharactersGameInstance::HandleEchoRequest);
+	const FHttpRequestHandler NotifyHandler = FHttpRequestHandler::CreateUObject(this, &UcharactersGameInstance::HandleNotifyRequest);
 
 	// Register both variants because Unreal routes are exact-path matches.
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/health"), EHttpServerRequestVerbs::VERB_GET, HealthHandler);
@@ -227,8 +229,11 @@ void UcharactersGameInstance::StartLocalHttpServer()
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/echo"), EHttpServerRequestVerbs::VERB_GET | EHttpServerRequestVerbs::VERB_POST, EchoHandler);
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/echo/"), EHttpServerRequestVerbs::VERB_GET | EHttpServerRequestVerbs::VERB_POST, EchoHandler);
 
+	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/notify"), EHttpServerRequestVerbs::VERB_POST, NotifyHandler);
+	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/notify/"), EHttpServerRequestVerbs::VERB_POST, NotifyHandler);
+
 	HttpServerModule.StartAllListeners();
-	UE_LOG(Logcharacters, Log, TEXT("HTTP server listening on port %d. Endpoints: /health, /echo"), LocalHttpServerPort);
+	UE_LOG(Logcharacters, Log, TEXT("HTTP server listening on port %d. Endpoints: /health, /echo, /notify"), LocalHttpServerPort);
 }
 
 void UcharactersGameInstance::StopLocalHttpServer()
@@ -289,6 +294,53 @@ bool UcharactersGameInstance::HandleEchoRequest(const FHttpServerRequest& Reques
 	}
 
 	const FString Response = FString::Printf(TEXT("{\"echo\":\"%s\"}"), *EscapeJson(EchoText));
+	TUniquePtr<FHttpServerResponse> HttpResponse = FHttpServerResponse::Create(Response, TEXT("application/json"));
+	HttpResponse->Code = EHttpServerResponseCodes::Ok;
+	OnComplete(MoveTemp(HttpResponse));
+	return true;
+}
+
+bool UcharactersGameInstance::HandleNotifyRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
+{
+	// Parse the JSON body to extract the "message" field.
+	FString NotifyMessage;
+	FString RawBody;
+	if (Request.Body.Num() > 0)
+	{
+		FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(Request.Body.GetData()), Request.Body.Num());
+		RawBody = FString(Converter.Length(), Converter.Get());
+	}
+
+	if (!RawBody.IsEmpty())
+	{
+		TSharedPtr<FJsonObject> JsonObj;
+		const TSharedRef<TJsonReader<>> Reader = TJsonReaderFactory<>::Create(RawBody);
+		if (FJsonSerializer::Deserialize(Reader, JsonObj) && JsonObj.IsValid())
+		{
+			JsonObj->TryGetStringField(TEXT("message"), NotifyMessage);
+		}
+	}
+
+	if (NotifyMessage.IsEmpty())
+	{
+		NotifyMessage = RawBody.IsEmpty() ? TEXT("(no message)") : RawBody;
+	}
+
+	// Display the message on the player's HUD.
+	if (UWorld* World = GetWorld())
+	{
+		if (APlayerController* PC = World->GetFirstPlayerController())
+		{
+			if (AcharactersHUD* HUD = Cast<AcharactersHUD>(PC->GetHUD()))
+			{
+				HUD->AddTransientMessage(NotifyMessage, FColor::Cyan, 3.0f);
+			}
+		}
+	}
+
+	UE_LOG(Logcharacters, Log, TEXT("Platform notify received: %s"), *NotifyMessage);
+
+	const FString Response = TEXT("{\"ok\":true}");
 	TUniquePtr<FHttpServerResponse> HttpResponse = FHttpServerResponse::Create(Response, TEXT("application/json"));
 	HttpResponse->Code = EHttpServerResponseCodes::Ok;
 	OnComplete(MoveTemp(HttpResponse));

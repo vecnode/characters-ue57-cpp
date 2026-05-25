@@ -87,6 +87,7 @@ private:
 
 	bool HandleHealthRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleEchoRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	bool HandleNotifyRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	FString BuildPlatformUrl() const;
 	void StartLocalHttpServer();
 	void StopLocalHttpServer();
