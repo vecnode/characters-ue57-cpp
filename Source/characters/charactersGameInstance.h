@@ -62,16 +62,32 @@ public:
 	UFUNCTION(BlueprintCallable, Category="Networking|HTTP Server")
 	FString GetLocalHttpServerStatusText() const;
 
+	UFUNCTION(BlueprintCallable, Category="Networking|Platform")
+	void SendEventToPlatform(const FString& EventName, const FString& Message, const FString& SourceOverride = TEXT(""));
+
 	UPROPERTY(Config, EditAnywhere, Category="Networking|HTTP Server")
 	bool bEnableLocalHttpServer = true;
 
 	UPROPERTY(Config, EditAnywhere, Category="Networking|HTTP Server", meta=(ClampMin="1024", ClampMax="65535"))
 	int32 LocalHttpServerPort = 30080;
 
+	UPROPERTY(Config, EditAnywhere, Category="Networking|Platform")
+	bool bEnablePlatformForwarding = true;
+
+	UPROPERTY(Config, EditAnywhere, Category="Networking|Platform")
+	FString PlatformBaseUrl = TEXT("http://127.0.0.1:8000");
+
+	UPROPERTY(Config, EditAnywhere, Category="Networking|Platform")
+	FString PlatformEventEndpoint = TEXT("/api/unreal/event");
+
+	UPROPERTY(Config, EditAnywhere, Category="Networking|Platform")
+	FString PlatformSessionId;
+
 private:
 
 	bool HandleHealthRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
 	bool HandleEchoRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete);
+	FString BuildPlatformUrl() const;
 	void StartLocalHttpServer();
 	void StopLocalHttpServer();
 

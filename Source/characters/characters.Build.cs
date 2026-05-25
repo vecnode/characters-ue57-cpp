@@ -18,7 +18,10 @@ public class characters : ModuleRules
 			"NavigationSystem",
 			"StateTreeModule",
 			"GameplayStateTreeModule",
+			"HTTP",
 			"HTTPServer",
+			"Json",
+			"JsonUtilities",
 			"UMG",
 			"Slate"
 		});

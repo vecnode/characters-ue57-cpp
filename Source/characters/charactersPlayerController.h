@@ -65,6 +65,9 @@ protected:
 	/** Requests application quit when Escape is pressed. */
 	void HandleEscapePressed();
 
+	/** Shows a quick HUD debug message when Y is pressed. */
+	void HandleYPressed();
+
 	/** Toggles player possession between manual control and runtime AI autopilot. */
 	void HandleToggleAutopilotPressed();
 

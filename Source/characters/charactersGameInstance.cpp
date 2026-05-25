@@ -9,6 +9,11 @@
 #include "HttpServerModule.h"
 #include "HttpServerRequest.h"
 #include "HttpServerResponse.h"
+#include "HttpModule.h"
+#include "Interfaces/IHttpRequest.h"
+#include "Interfaces/IHttpResponse.h"
+#include "Serialization/JsonSerializer.h"
+#include "Serialization/JsonWriter.h"
 
 namespace
 {
@@ -89,6 +94,92 @@ void UcharactersGameInstance::Shutdown()
 {
 	StopLocalHttpServer();
 	Super::Shutdown();
+}
+
+FString UcharactersGameInstance::BuildPlatformUrl() const
+{
+	const FString Base = PlatformBaseUrl.EndsWith(TEXT("/")) ? PlatformBaseUrl.LeftChop(1) : PlatformBaseUrl;
+	const FString Path = PlatformEventEndpoint.StartsWith(TEXT("/")) ? PlatformEventEndpoint : FString::Printf(TEXT("/%s"), *PlatformEventEndpoint);
+	return Base + Path;
+}
+
+void UcharactersGameInstance::SendEventToPlatform(const FString& EventName, const FString& Message, const FString& SourceOverride)
+{
+	if (!bEnablePlatformForwarding)
+	{
+		UE_LOG(Logcharacters, Verbose, TEXT("Platform forwarding disabled. Event '%s' was not sent."), *EventName);
+		return;
+	}
+
+	const FString RequestUrl = BuildPlatformUrl();
+	if (RequestUrl.IsEmpty())
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("Platform forwarding URL is empty. Configure PlatformBaseUrl/PlatformEventEndpoint."));
+		return;
+	}
+
+	TSharedRef<FJsonObject> Payload = MakeShared<FJsonObject>();
+	Payload->SetStringField(TEXT("source"), SourceOverride.IsEmpty() ? TEXT("unreal") : SourceOverride);
+	Payload->SetStringField(TEXT("event"), EventName);
+	Payload->SetStringField(TEXT("message"), Message);
+	Payload->SetStringField(TEXT("session_id"), PlatformSessionId.IsEmpty() ? TEXT("default") : PlatformSessionId);
+	Payload->SetStringField(TEXT("timestamp_utc"), FDateTime::UtcNow().ToIso8601());
+
+	TSharedRef<FJsonObject> Metadata = MakeShared<FJsonObject>();
+	Metadata->SetStringField(TEXT("map"), GetWorld() ? GetWorld()->GetMapName() : TEXT("unknown"));
+	Metadata->SetStringField(TEXT("build"), GetBuildConfigurationLabel());
+	Payload->SetObjectField(TEXT("metadata"), Metadata);
+
+	FString RequestBody;
+	{
+		TSharedRef<TJsonWriter<>> Writer = TJsonWriterFactory<>::Create(&RequestBody);
+		if (!FJsonSerializer::Serialize(Payload, Writer))
+		{
+			UE_LOG(Logcharacters, Warning, TEXT("Failed to serialize platform event payload for '%s'."), *EventName);
+			return;
+		}
+	}
+
+	TSharedRef<IHttpRequest, ESPMode::ThreadSafe> HttpRequest = FHttpModule::Get().CreateRequest();
+	HttpRequest->SetURL(RequestUrl);
+	HttpRequest->SetVerb(TEXT("POST"));
+	HttpRequest->SetHeader(TEXT("Content-Type"), TEXT("application/json"));
+	HttpRequest->SetContentAsString(RequestBody);
+
+	HttpRequest->OnProcessRequestComplete().BindLambda(
+		[this, EventName](FHttpRequestPtr Request, FHttpResponsePtr Response, bool bWasSuccessful)
+		{
+			if (!bWasSuccessful)
+			{
+				UE_LOG(Logcharacters, Warning, TEXT("Platform event '%s' failed to send (network failure)."), *EventName);
+				return;
+			}
+
+			if (!Response.IsValid())
+			{
+				UE_LOG(Logcharacters, Warning, TEXT("Platform event '%s' received no HTTP response."), *EventName);
+				return;
+			}
+
+			const int32 StatusCode = Response->GetResponseCode();
+			if (StatusCode >= 200 && StatusCode < 300)
+			{
+				UE_LOG(Logcharacters, Log, TEXT("Platform event '%s' acknowledged [%d]."), *EventName, StatusCode);
+			}
+			else
+			{
+				UE_LOG(Logcharacters, Warning,
+					TEXT("Platform event '%s' returned HTTP %d. Body: %s"),
+					*EventName,
+					StatusCode,
+					*Response->GetContentAsString());
+			}
+		});
+
+	if (!HttpRequest->ProcessRequest())
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("Failed to dispatch platform event '%s' request."), *EventName);
+	}
 }
 
 FString UcharactersGameInstance::GetLocalHttpServerStatusText() const

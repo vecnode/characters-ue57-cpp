@@ -9,6 +9,7 @@
 #include "Blueprint/UserWidget.h"
 #include "characters.h"
 #include "charactersHUD.h"
+#include "charactersGameInstance.h"
 #include "charactersWanderAIController.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
@@ -503,6 +504,7 @@ void AcharactersPlayerController::SetupInputComponent()
 		if (!bUtilityKeysBound)
 		{
 			InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AcharactersPlayerController::HandleEscapePressed);
+			InputComponent->BindKey(EKeys::Y, IE_Pressed, this, &AcharactersPlayerController::HandleYPressed);
 			InputComponent->BindKey(EKeys::J, IE_Pressed, this, &AcharactersPlayerController::HandleToggleAutopilotPressed);
 			bUtilityKeysBound = true;
 		}
@@ -584,6 +586,27 @@ void AcharactersPlayerController::HandleEscapePressed()
 	}
 
 	UKismetSystemLibrary::QuitGame(this, this, EQuitPreference::Quit, false);
+}
+
+void AcharactersPlayerController::HandleYPressed()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	UE_LOG(Logcharacters, Log, TEXT("hello world 2"));
+
+	if (UcharactersGameInstance* GI = UcharactersGameInstance::Get(this))
+	{
+		const FString SourceLabel = GIsEditor ? TEXT("unreal-editor") : TEXT("unreal-standalone");
+		GI->SendEventToPlatform(TEXT("key_pressed"), TEXT("hello world 2"), SourceLabel);
+	}
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(TEXT("hello world 2"), FColor::Green, 2.0f);
+	}
 }
 
 void AcharactersPlayerController::HandleToggleAutopilotPressed()
