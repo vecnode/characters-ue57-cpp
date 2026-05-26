@@ -21,6 +21,21 @@ struct FcharactersHUDMessage
 	float TimeRemaining = 0.0f;
 };
 
+USTRUCT()
+struct FcharactersHUDStatusLine
+{
+	GENERATED_BODY()
+
+	UPROPERTY()
+	FName Key = NAME_None;
+
+	UPROPERTY()
+	FString Text;
+
+	UPROPERTY()
+	FColor Color = FColor::White;
+};
+
 UCLASS()
 class AcharactersHUD : public AHUD
 {
@@ -32,7 +47,16 @@ public:
 	UFUNCTION(BlueprintCallable, Category = "HUD")
 	void AddTransientMessage(const FString& Message, FColor Color = FColor::White, float DurationSeconds = 2.0f);
 
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void SetStatusLine(FName Key, const FString& Message, FColor Color = FColor::White);
+
+	UFUNCTION(BlueprintCallable, Category = "HUD")
+	void ClearStatusLine(FName Key);
+
 private:
 	UPROPERTY()
 	TArray<FcharactersHUDMessage> MessageQueue;
+
+	UPROPERTY()
+	TArray<FcharactersHUDStatusLine> StatusLines;
 };

@@ -23,8 +23,21 @@ public class characters : ModuleRules
 			"Json",
 			"JsonUtilities",
 			"UMG",
-			"Slate"
+			"Slate",
+			"LevelSequence",
+			"MovieRenderPipelineCore",
+			"MovieRenderPipelineRenderPasses",
+			"MovieRenderPipelineMP4Encoder"
 		});
+
+		if (Target.bBuildEditor)
+		{
+			PublicDependencyModuleNames.AddRange(new string[] {
+				"TakeRecorder",
+				"TakesCore",
+				"TakeRecorderSources"
+			});
+		}
 
 		PrivateDependencyModuleNames.AddRange(new string[] { });
 

@@ -23,7 +23,24 @@
 #include "GameFramework/SpringArmComponent.h"
 #include "InputCoreTypes.h"
 #include "Kismet/KismetSystemLibrary.h"
+#include "LevelSequence.h"
+#include "MoviePipelineGameOverrideSetting.h"
+#include "Misc/Paths.h"
+#include "MovieScene.h"
+#include "MoviePipelineOutputSetting.h"
+#include "MoviePipelinePrimaryConfig.h"
+#include "MoviePipelineQueueEngineSubsystem.h"
+#include "MoviePipelineExecutor.h"
+#include "MoviePipelineSetting.h"
+#include "MoviePipelineDeferredPasses.h"
+#include "MoviePipelineImageSequenceOutput.h"
+#include "UObject/UnrealType.h"
 #include "Widgets/Input/SVirtualJoystick.h"
+
+#if WITH_EDITOR
+#include "Recorder/TakeRecorderSubsystem.h"
+#include "TakeRecorderSettings.h"
+#endif
 
 namespace
 {
@@ -521,6 +538,20 @@ void AcharactersPlayerController::PlayerTick(float DeltaTime)
 	{
 		ApplyMouseWheelZoom(ControlledPawn, DeltaTime);
 	}
+
+	if (bRecordedTakeRenderInProgress && GEngine)
+	{
+		if (UMoviePipelineQueueEngineSubsystem* RenderSubsystem = GEngine->GetEngineSubsystem<UMoviePipelineQueueEngineSubsystem>())
+		{
+			if (UMoviePipelineExecutorBase* ActiveExecutor = RenderSubsystem->GetActiveExecutor())
+			{
+				const float RenderProgress = FMath::Clamp(ActiveExecutor->GetStatusProgress(), 0.0f, 1.0f);
+				RecordedTakeRenderStatusText = FString::Printf(TEXT("Rendering: %.0f%%"), RenderProgress * 100.0f);
+				RecordedTakeRenderStatusColor = FColor::Yellow;
+				UpdateRecordingStatusHud();
+			}
+		}
+	}
 }
 
 void AcharactersPlayerController::BeginPlay()
@@ -554,6 +585,8 @@ void AcharactersPlayerController::BeginPlay()
 		}
 
 	}
+
+	UpdateRecordingStatusHud();
 }
 
 void AcharactersPlayerController::SetupInputComponent()
@@ -567,6 +600,7 @@ void AcharactersPlayerController::SetupInputComponent()
 			InputComponent->BindKey(EKeys::Escape, IE_Pressed, this, &AcharactersPlayerController::HandleEscapePressed);
 			InputComponent->BindKey(EKeys::Y, IE_Pressed, this, &AcharactersPlayerController::HandleYPressed);
 			InputComponent->BindKey(EKeys::J, IE_Pressed, this, &AcharactersPlayerController::HandleToggleAutopilotPressed);
+			InputComponent->BindKey(EKeys::U, IE_Pressed, this, &AcharactersPlayerController::HandleRenderRecordedTakePressed);
 			InputComponent->BindKey(EKeys::V, IE_Pressed, this, &AcharactersPlayerController::HandleToggleCinematicCameraPressed);
 			bUtilityKeysBound = true;
 		}
@@ -689,12 +723,19 @@ void AcharactersPlayerController::HandleToggleAutopilotPressed()
 
 	if (bAutopilotEnabled)
 	{
+		StopAutopilotTakeRecording();
 		DisableAutopilotAndRepossess();
 	}
 	else
 	{
 		EnableAutopilotForCurrentPawn();
+		StartAutopilotTakeRecording();
 	}
+}
+
+void AcharactersPlayerController::HandleRenderRecordedTakePressed()
+{
+	SubmitLastRecordedTakeToRenderQueue();
 }
 
 void AcharactersPlayerController::HandleToggleCinematicCameraPressed()
@@ -1058,6 +1099,387 @@ void AcharactersPlayerController::EnableAutopilotForCurrentPawn()
 	}
 
 	EnableCinematicCameraMode();
+}
+
+void AcharactersPlayerController::StartAutopilotTakeRecording()
+{
+	if (bAutopilotTakeRecordingActive || !IsLocalPlayerController())
+	{
+		return;
+	}
+
+#if WITH_EDITOR
+	if (!GEngine)
+	{
+		return;
+	}
+
+	UTakeRecorderSubsystem* TakeRecorderSubsystem = GEngine->GetEngineSubsystem<UTakeRecorderSubsystem>();
+	if (!TakeRecorderSubsystem)
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("TakeRecorder: subsystem unavailable; recording was not started."));
+		return;
+	}
+
+	if (UTakeRecorderProjectSettings* ProjectSettings = GetMutableDefault<UTakeRecorderProjectSettings>())
+	{
+		bPreviousTakeRecordToPossessable = ProjectSettings->Settings.bRecordToPossessable;
+		bHasForcedTakeRecordToSpawnable = true;
+		ProjectSettings->Settings.bRecordToPossessable = false;
+	}
+
+	TakeRecorderSubsystem->TakeRecorderFinished.RemoveDynamic(this, &AcharactersPlayerController::HandleTakeRecorderFinished);
+	TakeRecorderSubsystem->TakeRecorderFinished.AddDynamic(this, &AcharactersPlayerController::HandleTakeRecorderFinished);
+
+	TakeRecorderSubsystem->SetTargetSequence();
+	TakeRecorderSubsystem->ClearSources();
+
+	AActor* ActorToRecord = nullptr;
+	if (APawn* ControlledPawn = GetPawn())
+	{
+		ActorToRecord = ControlledPawn;
+	}
+	else if (AutopilotPawn.IsValid())
+	{
+		ActorToRecord = AutopilotPawn.Get();
+	}
+
+	if (ActorToRecord)
+	{
+		TakeRecorderSubsystem->AddSourceForActor(ActorToRecord, true, false);
+	}
+	else
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("TakeRecorder: no pawn actor found to record (player pawn is null and autopilot pawn invalid)."));
+	}
+
+	if (RuntimeCinematicCameraActor && IsValid(RuntimeCinematicCameraActor))
+	{
+		TakeRecorderSubsystem->AddSourceForActor(RuntimeCinematicCameraActor, true, false);
+	}
+
+	if (!TakeRecorderSubsystem->StartRecording(false, true))
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("TakeRecorder: failed to start recording for autopilot take."));
+		RestoreTakeRecorderRecordToPossessableSetting();
+		return;
+	}
+
+	bAutopilotTakeRecordingActive = true;
+	UE_LOG(Logcharacters, Log, TEXT("TakeRecorder: recording started for autopilot take."));
+	UpdateRecordingStatusHud();
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(TEXT("Take Recorder: ON (J to stop)"), FColor::Yellow, 2.5f);
+	}
+#else
+	UE_LOG(Logcharacters, Warning, TEXT("TakeRecorder: unavailable in non-editor builds."));
+#endif
+}
+
+void AcharactersPlayerController::StopAutopilotTakeRecording()
+{
+	if (!bAutopilotTakeRecordingActive || !IsLocalPlayerController())
+	{
+		return;
+	}
+
+#if WITH_EDITOR
+	if (!GEngine)
+	{
+		bAutopilotTakeRecordingActive = false;
+		return;
+	}
+
+	if (UTakeRecorderSubsystem* TakeRecorderSubsystem = GEngine->GetEngineSubsystem<UTakeRecorderSubsystem>())
+	{
+		if (TakeRecorderSubsystem->IsRecording())
+		{
+			TakeRecorderSubsystem->StopRecording();
+		}
+		else
+		{
+			RestoreTakeRecorderRecordToPossessableSetting();
+		}
+	}
+	else
+	{
+		RestoreTakeRecorderRecordToPossessableSetting();
+	}
+#endif
+
+	bAutopilotTakeRecordingActive = false;
+	UE_LOG(Logcharacters, Log, TEXT("TakeRecorder: recording stop requested."));
+	UpdateRecordingStatusHud();
+}
+
+void AcharactersPlayerController::HandleTakeRecorderFinished(ULevelSequence* SequenceAsset)
+{
+	#if WITH_EDITOR
+	RestoreTakeRecorderRecordToPossessableSetting();
+	#endif
+
+	bAutopilotTakeRecordingActive = false;
+	LastRecordedAutopilotTake = SequenceAsset;
+	UpdateRecordingStatusHud();
+
+	UE_LOG(Logcharacters, Log, TEXT("TakeRecorder: finished. Sequence='%s'"), *GetNameSafe(SequenceAsset));
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(TEXT("Take Recorder: saved (press U to render)"), FColor::Green, 3.0f);
+	}
+}
+
+#if WITH_EDITOR
+void AcharactersPlayerController::RestoreTakeRecorderRecordToPossessableSetting()
+{
+	if (!bHasForcedTakeRecordToSpawnable)
+	{
+		return;
+	}
+
+	if (UTakeRecorderProjectSettings* ProjectSettings = GetMutableDefault<UTakeRecorderProjectSettings>())
+	{
+		ProjectSettings->Settings.bRecordToPossessable = bPreviousTakeRecordToPossessable;
+	}
+
+	bHasForcedTakeRecordToSpawnable = false;
+}
+#endif
+
+void AcharactersPlayerController::SubmitLastRecordedTakeToRenderQueue()
+{
+	if (!IsLocalPlayerController())
+	{
+		return;
+	}
+
+	if (bAutopilotTakeRecordingActive)
+	{
+		StopAutopilotTakeRecording();
+	}
+
+	ULevelSequence* SequenceToRender = LastRecordedAutopilotTake.Get();
+	if (!SequenceToRender)
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("MRQ: no recorded take available. Press J to record first."));
+		if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+		{
+			charactersHUD->AddTransientMessage(TEXT("No recorded take yet. Use J first."), FColor::Red, 2.5f);
+		}
+		return;
+	}
+
+	if (!GEngine)
+	{
+		return;
+	}
+
+	UMoviePipelineQueueEngineSubsystem* RenderSubsystem = GEngine->GetEngineSubsystem<UMoviePipelineQueueEngineSubsystem>();
+	if (!RenderSubsystem)
+	{
+		UE_LOG(Logcharacters, Error, TEXT("MRQ: runtime subsystem unavailable."));
+		return;
+	}
+
+	if (RenderSubsystem->IsRendering())
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("MRQ: render already in progress."));
+		bRecordedTakeRenderInProgress = true;
+		RecordedTakeRenderStatusText = TEXT("Rendering: already in progress");
+		RecordedTakeRenderStatusColor = FColor::Yellow;
+		UpdateRecordingStatusHud();
+		return;
+	}
+
+	RenderSubsystem->OnRenderFinished.RemoveDynamic(this, &AcharactersPlayerController::HandleRuntimeRenderFinished);
+	RenderSubsystem->OnRenderFinished.AddDynamic(this, &AcharactersPlayerController::HandleRuntimeRenderFinished);
+
+	UMoviePipelineExecutorJob* RenderJob = RenderSubsystem->AllocateJob(SequenceToRender);
+	if (!RenderJob)
+	{
+		UE_LOG(Logcharacters, Error, TEXT("MRQ: failed to allocate render job."));
+		return;
+	}
+
+	if (UWorld* CurrentWorld = GetWorld())
+	{
+		RenderJob->Map = FSoftObjectPath(CurrentWorld);
+	}
+	RenderJob->SetSequence(FSoftObjectPath(SequenceToRender));
+
+	UMoviePipelinePrimaryConfig* RenderConfig = RenderJob->GetConfiguration();
+	if (!RenderConfig)
+	{
+		UE_LOG(Logcharacters, Error, TEXT("MRQ: render job has no configuration."));
+		return;
+	}
+
+	UMoviePipelineOutputSetting* OutputSetting = Cast<UMoviePipelineOutputSetting>(
+		RenderConfig->FindOrAddSettingByClass(UMoviePipelineOutputSetting::StaticClass()));
+	if (!OutputSetting)
+	{
+		UE_LOG(Logcharacters, Error, TEXT("MRQ: failed to add output setting."));
+		return;
+	}
+
+	OutputSetting->OutputDirectory.Path = FPaths::ProjectSavedDir() / TEXT("Renders");
+	OutputSetting->FileNameFormat = TEXT("{sequence_name}_{date}_{time}_{frame_number}");
+	OutputSetting->OutputResolution = bRenderRecordedTakeAt4K ? FIntPoint(3840, 2160) : FIntPoint(2560, 1440);
+	OutputSetting->bUseCustomFrameRate = true;
+	OutputSetting->OutputFrameRate = FFrameRate(60, 1);
+
+	if (UMovieScene* MovieScene = SequenceToRender->GetMovieScene())
+	{
+		const FFrameRate DisplayRate = MovieScene->GetDisplayRate();
+		if (DisplayRate.IsValid() && DisplayRate.Numerator > 0)
+		{
+			OutputSetting->OutputFrameRate = DisplayRate;
+		}
+	}
+
+	if (UMoviePipelineGameOverrideSetting* GameOverrideSetting = Cast<UMoviePipelineGameOverrideSetting>(
+		RenderConfig->FindOrAddSettingByClass(UMoviePipelineGameOverrideSetting::StaticClass())))
+	{
+		UClass* DesiredGameModeClass = nullptr;
+		if (UWorld* CurrentWorld = GetWorld())
+		{
+			if (AGameModeBase* ActiveGameMode = CurrentWorld->GetAuthGameMode())
+			{
+				DesiredGameModeClass = ActiveGameMode->GetClass();
+			}
+			else if (AWorldSettings* WorldSettings = CurrentWorld->GetWorldSettings())
+			{
+				DesiredGameModeClass = WorldSettings->DefaultGameMode;
+			}
+		}
+
+		if (DesiredGameModeClass)
+		{
+			GameOverrideSetting->SoftGameModeOverride = DesiredGameModeClass;
+		}
+		else
+		{
+			GameOverrideSetting->SoftGameModeOverride = nullptr;
+		}
+	}
+
+	RenderConfig->FindOrAddSettingByClass(UMoviePipelineDeferredPassBase::StaticClass());
+
+	UClass* Mp4OutputClass = FindObject<UClass>(nullptr, TEXT("/Script/MovieRenderPipelineMP4Encoder.MoviePipelineMP4EncoderOutput"));
+	if (!Mp4OutputClass)
+	{
+		Mp4OutputClass = StaticLoadClass(UMoviePipelineSetting::StaticClass(), nullptr, TEXT("/Script/MovieRenderPipelineMP4Encoder.MoviePipelineMP4EncoderOutput"));
+	}
+
+	if (Mp4OutputClass)
+	{
+		if (UMoviePipelineSetting* Mp4Setting = RenderConfig->FindOrAddSettingByClass(Mp4OutputClass))
+		{
+			if (FByteProperty* RateControlProp = FindFProperty<FByteProperty>(Mp4Setting->GetClass(), TEXT("EncodingRateControl")))
+			{
+				RateControlProp->SetPropertyValue_InContainer(Mp4Setting, 1);
+			}
+
+			if (FIntProperty* ConstantRateFactorProp = FindFProperty<FIntProperty>(Mp4Setting->GetClass(), TEXT("ConstantRateFactor")))
+			{
+				ConstantRateFactorProp->SetPropertyValue_InContainer(Mp4Setting, 18);
+			}
+
+			if (FBoolProperty* IncludeAudioProp = FindFProperty<FBoolProperty>(Mp4Setting->GetClass(), TEXT("bIncludeAudio")))
+			{
+				IncludeAudioProp->SetPropertyValue_InContainer(Mp4Setting, true);
+			}
+		}
+	}
+	else
+	{
+		UE_LOG(Logcharacters, Warning, TEXT("MRQ: MP4 output class unavailable. Ensure MovieRenderPipeline plugin is enabled."));
+	}
+
+	if (bRenderPngSequenceAlongsideMp4)
+	{
+		if (UMoviePipelineImageSequenceOutput_PNG* PngSetting = Cast<UMoviePipelineImageSequenceOutput_PNG>(
+			RenderConfig->FindOrAddSettingByClass(UMoviePipelineImageSequenceOutput_PNG::StaticClass())))
+		{
+			PngSetting->bWriteAlpha = false;
+		}
+	}
+
+	RenderSubsystem->SetConfiguration(nullptr, false);
+	RenderSubsystem->RenderJob(RenderJob);
+	bRecordedTakeRenderInProgress = true;
+	RecordedTakeRenderStatusText = TEXT("Rendering: starting...");
+	RecordedTakeRenderStatusColor = FColor::Yellow;
+	UpdateRecordingStatusHud();
+
+	UE_LOG(Logcharacters, Log,
+		TEXT("MRQ: started render for '%s' at %s (%s + %s)."),
+		*GetNameSafe(SequenceToRender),
+		*OutputSetting->OutputResolution.ToString(),
+		TEXT("H.264 MP4"),
+		bRenderPngSequenceAlongsideMp4 ? TEXT("PNG") : TEXT("no PNG"));
+	UE_LOG(Logcharacters, Log, TEXT("MRQ: output directory is '%s'"), *OutputSetting->OutputDirectory.Path);
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(TEXT("Render started: MP4"), FColor::Cyan, 2.0f);
+	}
+}
+
+void AcharactersPlayerController::HandleRuntimeRenderFinished(FMoviePipelineOutputData Results)
+{
+	bRecordedTakeRenderInProgress = false;
+	RecordedTakeRenderStatusText = Results.bSuccess ? TEXT("Rendering: complete") : TEXT("Rendering: failed");
+	RecordedTakeRenderStatusColor = Results.bSuccess ? FColor::Green : FColor::Red;
+	UpdateRecordingStatusHud();
+
+	UE_LOG(Logcharacters, Log,
+		TEXT("MRQ: render finished success=%s shots=%d"),
+		Results.bSuccess ? TEXT("true") : TEXT("false"),
+		Results.ShotData.Num());
+
+	if (AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>())
+	{
+		charactersHUD->AddTransientMessage(
+			Results.bSuccess ? TEXT("Render complete") : TEXT("Render failed"),
+			Results.bSuccess ? FColor::Green : FColor::Red,
+			3.0f);
+	}
+}
+
+void AcharactersPlayerController::UpdateRecordingStatusHud()
+{
+	AcharactersHUD* charactersHUD = GetHUD<AcharactersHUD>();
+	if (!charactersHUD)
+	{
+		return;
+	}
+
+	charactersHUD->SetStatusLine(
+		TEXT("RecordingStatus"),
+		FString::Printf(TEXT("Recording: %s"), bAutopilotTakeRecordingActive ? TEXT("ON") : TEXT("OFF")),
+		bAutopilotTakeRecordingActive ? FColor::Yellow : FColor::Silver);
+
+	FString LastTakeStatus = TEXT("Last Take: none");
+	FColor LastTakeColor = FColor::Silver;
+	if (ULevelSequence* LastTake = LastRecordedAutopilotTake.Get())
+	{
+		FString TakeName = LastTake->GetName();
+		const int32 MaxTakeNameChars = 32;
+		if (TakeName.Len() > MaxTakeNameChars)
+		{
+			TakeName = TakeName.Left(MaxTakeNameChars - 3) + TEXT("...");
+		}
+
+		LastTakeStatus = FString::Printf(TEXT("Last Take: ready (%s)"), *TakeName);
+		LastTakeColor = FColor::Green;
+	}
+
+	charactersHUD->SetStatusLine(TEXT("LastTakeStatus"), LastTakeStatus, LastTakeColor);
+	charactersHUD->SetStatusLine(TEXT("RenderStatus"), RecordedTakeRenderStatusText, RecordedTakeRenderStatusColor);
 }
 
 void AcharactersPlayerController::DisableAutopilotAndRepossess()

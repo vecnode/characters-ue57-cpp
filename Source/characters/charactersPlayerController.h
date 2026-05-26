@@ -6,11 +6,13 @@
 #include "CoreMinimal.h"
 #include "Camera/CameraActor.h"
 #include "GameFramework/PlayerController.h"
+#include "MovieRenderPipelineDataTypes.h"
 #include "UObject/SoftObjectPtr.h"
 #include "charactersPlayerController.generated.h"
 
 class AAIController;
 class UInputMappingContext;
+class ULevelSequence;
 class UUserWidget;
 
 /**
@@ -73,6 +75,9 @@ protected:
 	/** Toggles player possession between manual control and runtime AI autopilot. */
 	void HandleToggleAutopilotPressed();
 
+	/** Submits the most recently recorded autopilot take to Movie Render Queue. */
+	void HandleRenderRecordedTakePressed();
+
 	/** Bound to V: toggles cinematic orbit camera mode on/off. */
 	void HandleToggleCinematicCameraPressed();
 
@@ -96,6 +101,31 @@ protected:
 
 	/** Disables AI autopilot and repossesses the last autopilot pawn. */
 	void DisableAutopilotAndRepossess();
+
+	/** Starts recording the autopilot movement + cinematic camera take. */
+	void StartAutopilotTakeRecording();
+
+	/** Stops an in-progress autopilot take recording. */
+	void StopAutopilotTakeRecording();
+
+#if WITH_EDITOR
+	/** Restores the editor's prior Take Recorder possessable/spawnable preference after our forced capture mode. */
+	void RestoreTakeRecorderRecordToPossessableSetting();
+#endif
+
+	/** Enqueues a render for the last finished take using runtime MRQ. */
+	void SubmitLastRecordedTakeToRenderQueue();
+
+	/** Pushes current recording/take/render state into the persistent HUD status panel. */
+	void UpdateRecordingStatusHud();
+
+	/** Receives the final recorded take sequence from Take Recorder. */
+	UFUNCTION()
+	void HandleTakeRecorderFinished(ULevelSequence* SequenceAsset);
+
+	/** Receives completion callback for runtime MRQ renders. */
+	UFUNCTION()
+	void HandleRuntimeRenderFinished(FMoviePipelineOutputData Results);
 
 public:
 
@@ -190,6 +220,37 @@ protected:
 
 	/** Last pawn handed over to autopilot. */
 	TWeakObjectPtr<APawn> AutopilotPawn;
+
+	/** True while a J-session take recording is running. */
+	bool bAutopilotTakeRecordingActive = false;
+
+	/** Most recent completed take captured by the J toggle flow. */
+	TWeakObjectPtr<ULevelSequence> LastRecordedAutopilotTake;
+
+#if WITH_EDITOR
+	/** True while we have temporarily forced Take Recorder to capture spawnables. */
+	bool bHasForcedTakeRecordToSpawnable = false;
+
+	/** Previous Take Recorder project setting backup for bRecordToPossessable. */
+	bool bPreviousTakeRecordToPossessable = false;
+#endif
+
+	/** True while runtime MRQ is actively rendering the recorded take. */
+	bool bRecordedTakeRenderInProgress = false;
+
+	/** Cached one-line render status shown in the HUD panel. */
+	FString RecordedTakeRenderStatusText = TEXT("Rendering: idle");
+
+	/** Color for the render status line in the HUD panel. */
+	FColor RecordedTakeRenderStatusColor = FColor::Silver;
+
+	/** Render take at 4K instead of 1440p when true. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic|Recording")
+	bool bRenderRecordedTakeAt4K = false;
+
+	/** When true, U export writes a PNG sequence alongside MP4. */
+	UPROPERTY(EditAnywhere, Category = "Camera|Cinematic|Recording")
+	bool bRenderPngSequenceAlongsideMp4 = true;
 
 	/** Configurable controller class used for autopilot possession. */
 	UPROPERTY(EditAnywhere, Category = "AI|Autopilot")
