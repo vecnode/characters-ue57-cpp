@@ -2,6 +2,10 @@
 
 UE 5.7 C++ project focused on direct possession of a placed MetaHuman pawn and a small set of runtime systems.
 
+## Dependencies
+
+Lorem ipsum.
+
 ## Source Features
 - `charactersGameMode`
 	- Possesses a placed pawn first, using name, tag, class, or first valid fallback.
