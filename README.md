@@ -1,4 +1,4 @@
-# UE5 MetaHuman Template
+# UE5 MetaHuman Control Template
 
 UE 5.7 C++ project focused on direct possession of a placed MetaHuman pawn and a small set of runtime systems.
 
@@ -45,6 +45,15 @@ Lorem ipsum.
 - Open the workspace and press `Ctrl + F5`.
 - Use the `charactersEditor Win64 Development` launch config.
 - In PIE, confirm a placed pawn exists if you want direct possession.
+
+
+## Project (C++)
+
+- ok
+
+## Keyboard
+
+- ok
 
 ## License
 

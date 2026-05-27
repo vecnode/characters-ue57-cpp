@@ -1,18 +1,18 @@
 // Copyright (c) vecnode 2026. All Rights Reserved.
 
-#include "charactersGameInstance.h"
-#include "characters.h"
-#include "charactersCharacter.h"
-#include "charactersHUD.h"
+#include "Systems/Runtime/charactersGameInstance.h"
+#include "Core/characters.h"
+#include "UI/HUD/charactersHUD.h"
 #include "Engine/World.h"
+#include "HttpModule.h"
 #include "HttpPath.h"
-#include "IHttpRouter.h"
 #include "HttpServerModule.h"
 #include "HttpServerRequest.h"
 #include "HttpServerResponse.h"
-#include "HttpModule.h"
+#include "IHttpRouter.h"
 #include "Interfaces/IHttpRequest.h"
 #include "Interfaces/IHttpResponse.h"
+#include "Modules/ModuleManager.h"
 #include "Serialization/JsonSerializer.h"
 #include "Serialization/JsonWriter.h"
 
@@ -60,22 +60,6 @@ namespace
 			Handles.Add(Handle);
 		}
 	}
-}
-
-UcharactersGameInstance* UcharactersGameInstance::Get(const UObject* WorldContextObject)
-{
-	if (!IsValid(WorldContextObject))
-	{
-		return nullptr;
-	}
-
-	UWorld* World = WorldContextObject->GetWorld();
-	if (!IsValid(World))
-	{
-		return nullptr;
-	}
-
-	return Cast<UcharactersGameInstance>(World->GetGameInstance());
 }
 
 void UcharactersGameInstance::Init()
@@ -260,13 +244,10 @@ void UcharactersGameInstance::StartLocalHttpServer()
 	const FHttpRequestHandler EchoHandler = FHttpRequestHandler::CreateUObject(this, &UcharactersGameInstance::HandleEchoRequest);
 	const FHttpRequestHandler NotifyHandler = FHttpRequestHandler::CreateUObject(this, &UcharactersGameInstance::HandleNotifyRequest);
 
-	// Register both variants because Unreal routes are exact-path matches.
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/health"), EHttpServerRequestVerbs::VERB_GET, HealthHandler);
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/health/"), EHttpServerRequestVerbs::VERB_GET, HealthHandler);
-
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/echo"), EHttpServerRequestVerbs::VERB_GET | EHttpServerRequestVerbs::VERB_POST, EchoHandler);
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/echo/"), EHttpServerRequestVerbs::VERB_GET | EHttpServerRequestVerbs::VERB_POST, EchoHandler);
-
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/notify"), EHttpServerRequestVerbs::VERB_POST, NotifyHandler);
 	AddBoundRoute(LocalHttpRouter, RouteHandles, TEXT("/notify/"), EHttpServerRequestVerbs::VERB_POST, NotifyHandler);
 
@@ -322,13 +303,10 @@ bool UcharactersGameInstance::HandleEchoRequest(const FHttpServerRequest& Reques
 	{
 		EchoText = *QueryValue;
 	}
-	else
+	else if (Request.Body.Num() > 0)
 	{
-		if (Request.Body.Num() > 0)
-		{
-			FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(Request.Body.GetData()), Request.Body.Num());
-			EchoText = FString(Converter.Length(), Converter.Get());
-		}
+		FUTF8ToTCHAR Converter(reinterpret_cast<const ANSICHAR*>(Request.Body.GetData()), Request.Body.Num());
+		EchoText = FString(Converter.Length(), Converter.Get());
 	}
 
 	const FString Response = FString::Printf(TEXT("{\"echo\":\"%s\"}"), *EscapeJson(EchoText));
@@ -340,7 +318,6 @@ bool UcharactersGameInstance::HandleEchoRequest(const FHttpServerRequest& Reques
 
 bool UcharactersGameInstance::HandleNotifyRequest(const FHttpServerRequest& Request, const FHttpResultCallback& OnComplete)
 {
-	// Parse the JSON body to extract the "message" field.
 	FString NotifyMessage;
 	FString RawBody;
 	if (Request.Body.Num() > 0)
@@ -364,7 +341,6 @@ bool UcharactersGameInstance::HandleNotifyRequest(const FHttpServerRequest& Requ
 		NotifyMessage = RawBody.IsEmpty() ? TEXT("(no message)") : RawBody;
 	}
 
-	// Display the message on the player's HUD.
 	if (UWorld* World = GetWorld())
 	{
 		if (APlayerController* PC = World->GetFirstPlayerController())

@@ -1,6 +1,7 @@
 # Unreal generated/build artifacts
 Binaries/
 Build/
+Builds/
 DerivedDataCache/
 Intermediate/
 Saved/
@@ -19,38 +20,17 @@ Saved/
 *.log
 *.dmp
 
-# Requested: stop tracking hashed World Partition external asset files
-Content/__ExternalActors__/
-Content/__ExternalObjects__/
-Content/Variant_Combat/
-Content/Variant_Platforming/
-Content/Variant_SideScrolling/
-Binaries/
-Build/
-DerivedDataCache/
-Intermediate/
-Saved/
-
-
-.vs/
-.vscode/
-*.VC.db
-*.VC.opendb
-*.suo
-*.user
-*.userosscache
-*.sln.docstates
-
-*.log
-*.dmp
-
+# Workspace-local files
 *.code-workspace
 
-*.uasset
-
-Content/Factory_Pack_V1
-
-Builds/
-
-Cinematics/
-Developers/
+# Personal scratch content
+Content/Developers/
+Content/_ExternalActors_/
+Content/Cinematics/
+Content/__ExternalActors__/
+Content/__ExternalObjects__/
+Content/Cinematics/
+Content/Collections/
+Content/Factory_Pack_V1/
+Content/MetaHumans/
+Content/Characters/

@@ -1,8 +1,8 @@
 // Copyright (c) vecnode 2026. All Rights Reserved.
 
-#include "charactersMHPlayer.h"
-#include "charactersGameInstance.h"
-#include "characters.h"
+#include "Gameplay/Characters/charactersMHPlayer.h"
+#include "Systems/Runtime/charactersGameInstance.h"
+#include "Core/characters.h"
 #include "Components/SkeletalMeshComponent.h"
 
 AcharactersMHPlayer::AcharactersMHPlayer()

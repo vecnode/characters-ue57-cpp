@@ -1,11 +1,11 @@
 // Based on Unreal Engine template code.
 // Project-specific implementation and modifications Copyright (c) vecnode, 2026.
 
-#include "charactersGameMode.h"
-#include "charactersHUD.h"
-#include "charactersMHPlayer.h"
-#include "charactersPlayerController.h"
-#include "characters.h"
+#include "Gameplay/Modes/charactersGameMode.h"
+#include "UI/HUD/charactersHUD.h"
+#include "Gameplay/Characters/charactersMHPlayer.h"
+#include "Gameplay/Controllers/charactersPlayerController.h"
+#include "Core/characters.h"
 #include "EngineUtils.h"
 #include "GameFramework/Pawn.h"
 #include "GameFramework/PlayerController.h"

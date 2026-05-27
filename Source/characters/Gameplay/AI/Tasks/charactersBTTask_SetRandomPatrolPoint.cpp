@@ -1,6 +1,6 @@
 // Copyright (c) vecnode 2026. All Rights Reserved.
 
-#include "charactersBTTask_SetRandomPatrolPoint.h"
+#include "Gameplay/AI/Tasks/charactersBTTask_SetRandomPatrolPoint.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "NavigationSystem.h"

@@ -1,7 +1,7 @@
 // Based on Unreal Engine template code.
 // Project-specific implementation and modifications Copyright (c) vecnode, 2026.
 
-#include "charactersCharacter.h"
+#include "Gameplay/Characters/charactersCharacter.h"
 #include "Camera/CameraComponent.h"
 #include "Components/CapsuleComponent.h"
 #include "GameFramework/CharacterMovementComponent.h"
@@ -13,9 +13,9 @@
 #include "EnhancedInputSubsystems.h"
 #include "InputActionValue.h"
 #include "InputCoreTypes.h"
-#include "charactersGameInstance.h"
-#include "charactersHUD.h"
-#include "characters.h"
+#include "Systems/Runtime/charactersGameInstance.h"
+#include "UI/HUD/charactersHUD.h"
+#include "Core/characters.h"
 
 namespace
 {

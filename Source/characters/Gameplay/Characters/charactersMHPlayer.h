@@ -3,7 +3,7 @@
 #pragma once
 
 #include "CoreMinimal.h"
-#include "charactersCharacter.h"
+#include "Gameplay/Characters/charactersCharacter.h"
 #include "charactersMHPlayer.generated.h"
 
 /** MetaHuman player pawn that adds C++ movement fallback and GI registration. */

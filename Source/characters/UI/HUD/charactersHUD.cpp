@@ -1,6 +1,6 @@
 // Copyright (c) vecnode 2026. All Rights Reserved.
 
-#include "charactersHUD.h"
+#include "UI/HUD/charactersHUD.h"
 #include "Engine/Canvas.h"
 #include "Engine/Engine.h"
 

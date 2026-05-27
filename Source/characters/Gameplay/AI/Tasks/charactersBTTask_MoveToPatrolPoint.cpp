@@ -1,6 +1,6 @@
 // Copyright (c) vecnode 2026. All Rights Reserved.
 
-#include "charactersBTTask_MoveToPatrolPoint.h"
+#include "Gameplay/AI/Tasks/charactersBTTask_MoveToPatrolPoint.h"
 #include "AIController.h"
 #include "BehaviorTree/BlackboardComponent.h"
 #include "GameFramework/Pawn.h"

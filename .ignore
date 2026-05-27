@@ -1,6 +1,15 @@
 /.vs
 /.vscode
-/Content
+/Binaries
+/Build
+/Builds
 /DerivedDataCache
 /Intermediate
 /Saved
+/Content/Developers
+
+
+Content/__ExternalActors__/
+Content/__ExternalObjects__/
+Content/Cinematics/
+Content/Collections/

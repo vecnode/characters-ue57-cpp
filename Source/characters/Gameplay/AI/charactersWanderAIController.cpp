@@ -1,6 +1,6 @@
 // Copyright (c) vecnode 2026. All Rights Reserved.
 
-#include "charactersWanderAIController.h"
+#include "Gameplay/AI/charactersWanderAIController.h"
 #include "BehaviorTree/BehaviorTree.h"
 #include "BehaviorTree/BehaviorTreeComponent.h"
 #include "BehaviorTree/BlackboardComponent.h"
@@ -9,9 +9,9 @@
 #include "BehaviorTree/Composites/BTComposite_Selector.h"
 #include "BehaviorTree/Composites/BTComposite_Sequence.h"
 #include "BehaviorTree/Tasks/BTTask_Wait.h"
-#include "characters.h"
-#include "charactersBTTask_MoveToPatrolPoint.h"
-#include "charactersBTTask_SetRandomPatrolPoint.h"
+#include "Core/characters.h"
+#include "Gameplay/AI/Tasks/charactersBTTask_MoveToPatrolPoint.h"
+#include "Gameplay/AI/Tasks/charactersBTTask_SetRandomPatrolPoint.h"
 
 namespace
 {
