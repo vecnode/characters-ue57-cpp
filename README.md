@@ -21,7 +21,7 @@
 
 ## Implemented Features
 
-- Character/controller migration with Enhanced Input + keyboard/mouse fallback.
+- Character/controller runtime with Enhanced Input + keyboard/mouse fallback.
 - Autopilot handoff to AI controller and runtime patrol behavior tree.
 - Cinematic orbit camera mode with runtime camera actor.
 - HUD transient messages and persistent status lines.
@@ -37,4 +37,15 @@
 - Game instance path invokes StartLocalHttpServer in Init.
 - Project config currently does not set plugin-native GameInstanceClass in DefaultEngine.ini.
 - Project config currently uses a blueprint GlobalDefaultGameMode path.
+
+## New Project Possession Checklist
+
+- Set your startup game mode to AMetaAgentGameMode (or a BP derived from it).
+- Place exactly one MetaHuman pawn/character in the level with name MAIN_CHARACTER.
+- For strict production behavior, keep:
+	- bRequireExactPreferredPawnName=True
+	- bRequireUniquePreferredPawnName=True
+	- bAllowSpawnFallback=False
+- If the placed MetaHuman has no spring-arm/camera rig, the controller now adds a runtime third-person camera fallback.
+- If you want another actor name, change PreferredPlacedPawnName in MetaAgentGameMode config/defaults.
 

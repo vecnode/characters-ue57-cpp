@@ -119,7 +119,7 @@ void AMetaAgentGameMode::RestartPlayer(AController* NewPlayer)
 	}
 
 	APawn* NamedPawn = nullptr;
-	APawn* TaggedPawn = nullptr;
+	int32 NamedPawnMatchCount = 0;
 	APawn* PreferredClassPawn = nullptr;
 	APawn* FirstUsablePawn = nullptr;
 
@@ -133,15 +133,13 @@ void AMetaAgentGameMode::RestartPlayer(AController* NewPlayer)
 
 		const bool bCanPossessCandidate = CanControllerPossessPlacedPawn(Candidate, NewPlayer);
 
-		if (!NamedPawn && bCanPossessCandidate && MatchesPreferredName(Candidate, PreferredPlacedPawnName))
+		if (bCanPossessCandidate && MatchesPreferredName(Candidate, PreferredPlacedPawnName))
 		{
-			NamedPawn = Candidate;
-			break;
-		}
-
-		if (!TaggedPawn && bCanPossessCandidate && Candidate->ActorHasTag(PreferredPlacedPawnTag))
-		{
-			TaggedPawn = Candidate;
+			++NamedPawnMatchCount;
+			if (!NamedPawn)
+			{
+				NamedPawn = Candidate;
+			}
 		}
 
 		if (!PreferredClassPawn && bCanPossessCandidate && PreferredClass && Candidate->IsA(PreferredClass))
@@ -155,19 +153,58 @@ void AMetaAgentGameMode::RestartPlayer(AController* NewPlayer)
 		}
 	}
 
-	APawn* SelectedPawn = NamedPawn
-		? NamedPawn
-		: (TaggedPawn ? TaggedPawn : (PreferredClassPawn ? PreferredClassPawn : FirstUsablePawn));
+	APawn* SelectedPawn = nullptr;
+
+	if (bRequireExactPreferredPawnName && !PreferredPlacedPawnName.IsEmpty())
+	{
+		if (NamedPawnMatchCount == 1)
+		{
+			SelectedPawn = NamedPawn;
+		}
+		else if (NamedPawnMatchCount > 1 && bRequireUniquePreferredPawnName)
+		{
+			UE_LOG(LogMetaAgent, Error,
+				TEXT("MetaAgentGameMode: Preferred pawn name '%s' is ambiguous (%d matches). Rename to a unique actor name, or disable unique-name enforcement."),
+				*PreferredPlacedPawnName,
+				NamedPawnMatchCount);
+
+			if (bAllowSpawnFallback)
+			{
+				UE_LOG(LogMetaAgent, Warning, TEXT("MetaAgentGameMode: Ambiguous preferred name. Using spawn fallback due to configuration."));
+				Super::RestartPlayer(NewPlayer);
+			}
+			return;
+		}
+		else
+		{
+			UE_LOG(LogMetaAgent, Error,
+				TEXT("MetaAgentGameMode: Required preferred pawn '%s' was not found. Place a pawn/character with this exact name, or disable strict name requirement."),
+				*PreferredPlacedPawnName);
+
+			if (bAllowSpawnFallback)
+			{
+				UE_LOG(LogMetaAgent, Warning, TEXT("MetaAgentGameMode: Required preferred name missing. Using spawn fallback due to configuration."));
+				Super::RestartPlayer(NewPlayer);
+			}
+			return;
+		}
+	}
+	else
+	{
+		SelectedPawn = NamedPawn
+			? NamedPawn
+			: (PreferredClassPawn ? PreferredClassPawn : FirstUsablePawn);
+	}
 
 	if (SelectedPawn)
 	{
 		NewPlayer->Possess(SelectedPawn);
 		UE_LOG(LogMetaAgent, Log,
-			TEXT("MetaAgentGameMode: Possessed placed pawn '%s' (%s). Name='%s' Tag='%s' ClassFilter=%s"),
+			TEXT("MetaAgentGameMode: Possessed placed pawn '%s' (%s). Name='%s' (matches=%d) ClassFilter=%s"),
 			*SelectedPawn->GetName(),
 			*SelectedPawn->GetClass()->GetName(),
 			*PreferredPlacedPawnName,
-			*PreferredPlacedPawnTag.ToString(),
+			NamedPawnMatchCount,
 			*GetNameSafe(PreferredClass));
 		return;
 	}
@@ -175,17 +212,15 @@ void AMetaAgentGameMode::RestartPlayer(AController* NewPlayer)
 	if (bAllowSpawnFallback)
 	{
 		UE_LOG(LogMetaAgent, Log,
-			TEXT("MetaAgentGameMode: No placed pawn found (Name='%s', Tag='%s'). Falling back to normal spawn."),
-			*PreferredPlacedPawnName,
-			*PreferredPlacedPawnTag.ToString());
+			TEXT("MetaAgentGameMode: No placed pawn found (Name='%s'). Falling back to normal spawn."),
+			*PreferredPlacedPawnName);
 		Super::RestartPlayer(NewPlayer);
 		return;
 	}
 
 	UE_LOG(LogMetaAgent, Error,
-		TEXT("MetaAgentGameMode: No placed pawn found (Name='%s', Tag='%s'). Place a Pawn/Character with that name/tag, or enable spawn fallback."),
-		*PreferredPlacedPawnName,
-		*PreferredPlacedPawnTag.ToString());
+		TEXT("MetaAgentGameMode: No placed pawn found (Name='%s'). Place a Pawn/Character with that name, or enable spawn fallback."),
+		*PreferredPlacedPawnName);
 }
 
 void AMetaAgentGameMode::BeginPlay()

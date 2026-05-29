@@ -32,13 +32,17 @@ protected:
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
 	TSoftClassPtr<APawn> PreferredPlacedPawnClass;
 
-	/** Optional actor tag used to pick a specific placed pawn (for example: PlayerCharacter). */
-	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
-	FName PreferredPlacedPawnTag = TEXT("PlayerCharacter");
-
 	/** Optional actor name/label from the World Outliner to pick first (for example: MAIN_CHARACTER). */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
 	FString PreferredPlacedPawnName = TEXT("MAIN_CHARACTER");
+
+	/** If true and PreferredPlacedPawnName is set, possession requires a name match. */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
+	bool bRequireExactPreferredPawnName = true;
+
+	/** If true, multiple pawns matching PreferredPlacedPawnName are treated as a startup error. */
+	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")
+	bool bRequireUniquePreferredPawnName = true;
 
 	/** If false, no pawn is spawned when a placed pawn cannot be found. */
 	UPROPERTY(EditDefaultsOnly, Config, Category = "Player")

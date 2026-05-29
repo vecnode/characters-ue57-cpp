@@ -7,6 +7,7 @@
 #include "Camera/CameraActor.h"
 #include "Camera/CameraComponent.h"
 #include "Camera/PlayerCameraManager.h"
+#include "Components/SceneComponent.h"
 #include "Components/SkeletalMeshComponent.h"
 #include "GameFramework/Character.h"
 #include "GameFramework/SpringArmComponent.h"
@@ -46,6 +47,49 @@ void AMetaAgentPlayerController::ConfigureCameraForPawn(APawn* InPawn)
 
 	USpringArmComponent* SpringArm = InPawn->FindComponentByClass<USpringArmComponent>();
 	UCameraComponent* FollowCam = InPawn->FindComponentByClass<UCameraComponent>();
+	USceneComponent* PawnRoot = InPawn->GetRootComponent();
+
+	if (!SpringArm && PawnRoot)
+	{
+		SpringArm = NewObject<USpringArmComponent>(InPawn, TEXT("MetaAgentRuntimeSpringArm"));
+		if (SpringArm)
+		{
+			InPawn->AddInstanceComponent(SpringArm);
+			SpringArm->SetupAttachment(PawnRoot);
+			SpringArm->TargetArmLength = 400.0f;
+			SpringArm->bUsePawnControlRotation = true;
+			SpringArm->bDoCollisionTest = false;
+			SpringArm->RegisterComponent();
+
+			UE_LOG(LogMetaAgent, Warning,
+				TEXT("CameraSetup: Pawn '%s' had no spring arm. Added runtime spring arm fallback."),
+				*GetNameSafe(InPawn));
+		}
+	}
+
+	if (!FollowCam)
+	{
+		FollowCam = NewObject<UCameraComponent>(InPawn, TEXT("MetaAgentRuntimeFollowCamera"));
+		if (FollowCam)
+		{
+			InPawn->AddInstanceComponent(FollowCam);
+			if (SpringArm)
+			{
+				FollowCam->SetupAttachment(SpringArm, USpringArmComponent::SocketName);
+			}
+			else if (PawnRoot)
+			{
+				FollowCam->SetupAttachment(PawnRoot);
+			}
+			FollowCam->bUsePawnControlRotation = false;
+			FollowCam->RegisterComponent();
+			FollowCam->Activate();
+
+			UE_LOG(LogMetaAgent, Warning,
+				TEXT("CameraSetup: Pawn '%s' had no camera. Added runtime follow camera fallback."),
+				*GetNameSafe(InPawn));
+		}
+	}
 
 	if (SpringArm)
 	{
