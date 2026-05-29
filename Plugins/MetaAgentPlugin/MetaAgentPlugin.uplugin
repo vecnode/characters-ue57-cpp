@@ -1,0 +1,53 @@
+{
+  "FileVersion": 3,
+  "Version": 1,
+  "VersionName": "0.1.0",
+  "FriendlyName": "Meta Agent Plugin",
+  "Description": "Plugin skeleton for migrating the characters gameplay runtime into a reusable plugin.",
+  "Category": "Gameplay",
+  "CreatedBy": "vecnode",
+  "CreatedByURL": "",
+  "DocsURL": "",
+  "MarketplaceURL": "",
+  "SupportURL": "",
+  "CanContainContent": true,
+  "IsBetaVersion": true,
+  "Installed": false,
+  "Modules": [
+    {
+      "Name": "MetaAgentPlugin",
+      "Type": "Runtime",
+      "LoadingPhase": "Default"
+    },
+    {
+      "Name": "MetaAgentPluginEditor",
+      "Type": "Editor",
+      "LoadingPhase": "Default"
+    }
+  ],
+  "Plugins": [
+    {
+      "Name": "EnhancedInput",
+      "Enabled": true
+    },
+    {
+      "Name": "StateTree",
+      "Enabled": true
+    },
+    {
+      "Name": "GameplayStateTree",
+      "Enabled": true
+    },
+    {
+      "Name": "MovieRenderPipeline",
+      "Enabled": true
+    },
+    {
+      "Name": "Takes",
+      "Enabled": true,
+      "TargetAllowList": [
+        "Editor"
+      ]
+    }
+  ]
+}
