@@ -128,7 +128,7 @@ void UMetaAgentRuntimeSubsystem::HandleWorldBeginPlay(UWorld& InWorld)
 	GMetaAgentRuntimeActive = bRequestedActive;
 	UE_LOG(LogMetaAgentPlugin, Log, TEXT("MetaAgent runtime global active state: %s"), GMetaAgentRuntimeActive ? TEXT("ACTIVE") : TEXT("INACTIVE"));
 
-	// Migration point: dispatch startup orchestration to ported systems here.
+	// Startup orchestration point for runtime systems.
 }
 
 FString UMetaAgentRuntimeSubsystem::BuildPlatformUrl() const

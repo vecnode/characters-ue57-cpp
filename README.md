@@ -1,48 +1,40 @@
 # MetaAgentPlugin
 
-Plugin migration of the gameplay/runtime code from `Source/characters` into a reusable plugin module.
+- UE5 gameplay plugin with reusable runtime systems.
+- Modules: MetaAgentPlugin (Runtime), MetaAgentPluginEditor (Editor).
+- Plugin deps: EnhancedInput, StateTree, GameplayStateTree, MovieRenderPipeline, Takes (Editor only).
 
-## Current status
+## Current Scope
 
-- Runtime module created: `MetaAgentPlugin`
-- Editor module created: `MetaAgentPluginEditor`
-- Plugin-native migrated runtime classes under `Source/MetaAgentPlugin/Migrated`
-- Startup class routing set to plugin classes:
-	- `GameInstanceClass=/Script/MetaAgentPlugin.MetaAgentGameInstance`
-	- `GlobalDefaultGameMode=/Script/MetaAgentPlugin.MetaAgentGameMode`
-- Startup runtime hook available via `UMetaAgentRuntimeSubsystem`
-- Settings registered via `UMetaAgentPluginSettings`
-- Blueprint interaction class available via `AMetaAgentMainActor` (`bActive`, Activate/Deactivate/Toggle)
+- Runtime code is centralized under Source/MetaAgentPlugin/Core, Gameplay, Systems, UI, Public, and Private.
+- Support/plugin-native classes live under Source/MetaAgentPlugin/Public and Private.
+- Editor module currently provides startup/shutdown hooks with logging.
 
-## Startup behavior
+## Main Runtime Pieces
 
-When enabled, the plugin loads at game startup and initializes `UMetaAgentRuntimeSubsystem`.
+- Runtime gate: global flag GMetaAgentRuntimeActive.
+- Settings: UMetaAgentPluginSettings with feature flags and networking config.
+- Subsystem path: UMetaAgentRuntimeSubsystem with active-state API and HTTP/platform helpers.
+- Gameplay path: UMetaAgentGameInstance + AMetaAgentGameMode + AMetaAgentPlayerController.
+- Blueprint helper: UMetaAgentBlueprintLibrary exposes runtime active query.
+- World toggle actor: AMetaAgentMainActor with Activate/Deactivate/Toggle.
 
-`UMetaAgentRuntimeSubsystem`:
-- Reads active/feature flags from plugin settings
-- Hooks world begin play and logs startup orchestration point
-- Provides `IsActive()` to Blueprints/C++
+## Implemented Features
 
-## Migration target mapping
+- Character/controller migration with Enhanced Input + keyboard/mouse fallback.
+- Autopilot handoff to AI controller and runtime patrol behavior tree.
+- Cinematic orbit camera mode with runtime camera actor.
+- HUD transient messages and persistent status lines.
+- Take Recorder + Movie Render Queue flow for autopilot takes.
+- HTTP server endpoints: /health, /echo, /notify.
+- Outbound platform event forwarding with JSON payload + response-driven HUD feedback.
 
-Migrated runtime folders in plugin:
+## Important Findings
 
-- `Migrated/Core`
-- `Migrated/Gameplay/AI`
-- `Migrated/Gameplay/Characters`
-- `Migrated/Gameplay/Controllers`
-- `Migrated/Gameplay/Modes`
-- `Migrated/Systems/Autopilot`
-- `Migrated/Systems/Camera`
-- `Migrated/Systems/Diagnostics`
-- `Migrated/Systems/Input`
-- `Migrated/Systems/Networking`
-- `Migrated/Systems/Recording`
-- `Migrated/Systems/Runtime`
-- `Migrated/UI/HUD`
+- Startup architecture is currently mixed: subsystem path and game instance path both exist.
+- Networking/server logic is duplicated across subsystem and game instance paths.
+- Subsystem defines StartLocalHttpServer but does not invoke it in Initialize.
+- Game instance path invokes StartLocalHttpServer in Init.
+- Project config currently does not set plugin-native GameInstanceClass in DefaultEngine.ini.
+- Project config currently uses a blueprint GlobalDefaultGameMode path.
 
-## Next implementation slices
-
-1. Add CoreRedirects from `/Script/characters.*` to `/Script/MetaAgentPlugin.*` if assets still reference old native classes.
-2. Migrate remaining direct runtime dependencies from project module to plugin-native paths.
-3. Remove now-redundant project-module class usage once validation is complete.

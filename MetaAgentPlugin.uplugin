@@ -3,7 +3,7 @@
   "Version": 1,
   "VersionName": "0.1.0",
   "FriendlyName": "Meta Agent Plugin",
-  "Description": "Plugin skeleton for migrating the characters gameplay runtime into a reusable plugin.",
+  "Description": "Gameplay runtime plugin for reusable character, AI, camera, HUD, networking, and recording systems.",
   "Category": "Gameplay",
   "CreatedBy": "vecnode",
   "CreatedByURL": "",

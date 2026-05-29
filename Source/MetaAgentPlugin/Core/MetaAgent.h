@@ -7,7 +7,10 @@
 /** Main log category used across the project */
 DECLARE_LOG_CATEGORY_EXTERN(LogMetaAgent, Log, All);
 
-/** Runtime switch controlled by plugin settings and MetaAgentMainActor Active toggle. */
+/**
+ * Central runtime switch shared across subsystem, game mode, controller, and AI systems.
+ * Controlled by plugin settings and MetaAgentMainActor active toggle.
+ */
 extern bool GMetaAgentRuntimeActive;
 
 FORCEINLINE bool IsMetaAgentRuntimeActive()

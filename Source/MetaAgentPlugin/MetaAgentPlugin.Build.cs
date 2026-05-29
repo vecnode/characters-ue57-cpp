@@ -10,7 +10,8 @@ public class MetaAgentPlugin : ModuleRules
 		PublicIncludePaths.AddRange(
 			new string[]
 			{
-				Path.Combine(ModuleDirectory, "Migrated")
+				// Centralized module layout: Core/, Gameplay/, Systems/, UI/ live directly under ModuleDirectory.
+				Path.Combine(ModuleDirectory)
 			}
 		);
 
